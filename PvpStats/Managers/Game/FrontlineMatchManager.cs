@@ -1,4 +1,4 @@
-﻿using Dalamud.Game.ClientState.Conditions;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Hooking;
@@ -26,6 +26,7 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
     private DateTime _lastPrint = DateTime.MinValue;
 
     private FrontlineMatchTimeline? _currentMatchTimeline;
+    private readonly FrontlineCombatLogger? _combatLogger;
 
     private Dictionary<PlayerAlias, int> _maxObservedBattleHigh = [];
 
@@ -54,6 +55,11 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
         //plugin.Log.Debug($"fl player payload address: 0x{_flPlayerPayloadHook!.Address:X2}");
         //_flDirectorCtorHook.Enable();
         _flMatchEndHook.Enable();
+        try {
+            _combatLogger = new(plugin);
+        } catch(Exception e) {
+            plugin.Log.Error(e, "failed to initialize Frontline combat logger; combat log disabled");
+        }
     }
 
     public override void Dispose() {
@@ -61,6 +67,7 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
         //Plugin.DutyState.DutyCompleted -= OnDutyCompleted;
         //_flDirectorCtorHook.Dispose();
         _flMatchEndHook.Dispose();
+        _combatLogger?.Dispose();
         base.Dispose();
     }
 
@@ -73,6 +80,7 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
         if(MatchHelper.GetFrontlineMap(dutyId) != null) {
             StartMatch();
         } else if(IsMatchInProgress()) {
+            _combatLogger?.Stop();
             Plugin.DataQueue.QueueDataOperation(() => {
                 Plugin.Functions._opcodeMatchCount++;
                 CurrentMatch = null;
@@ -111,6 +119,10 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
                     },
                     SelfBattleHigh = new(),
                 };
+                if(_combatLogger != null && (Plugin.Configuration.EnableCombatLogFL ?? true)) {
+                    _currentMatchTimeline.SelfCombatLog = new();
+                    _combatLogger.Start(_currentMatchTimeline.SelfCombatLog);
+                }
             }
             Plugin.Log.Information($"Starting new match on {CurrentMatch.Arena}");
             Plugin.DataQueue.QueueDataOperation(async () => {
@@ -124,6 +136,8 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
 
     private void FLMatchEnd10Detour(IntPtr p1, IntPtr p2) {
         Plugin.Log.Debug("Fl match end 10 detour entered.");
+        //stop logging on the game thread so the log isn't mutated while it's being saved
+        _combatLogger?.Stop();
         try {
 #if DEBUG
             Plugin.Functions.CreateByteDump(p2, 0x2000, "fl_match_results");
@@ -137,6 +151,18 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
                     await Plugin.FLCache.UpdateMatch(CurrentMatch!);
                     if(_currentMatchTimeline != null) {
                         await Plugin.Storage.UpdateFLTimeline(_currentMatchTimeline);
+                    }
+
+                    if(Plugin.Configuration.AutoExportFLMatchHtml ?? false) {
+                        var finished = CurrentMatch!;
+                        _ = Task.Run(async () => {
+                            try {
+                                var path = await Plugin.Exporter.ExportFrontlineMatchHtml(finished, _currentMatchTimeline);
+                                if(path != null) Plugin.ChatGui.Print($"[FLStats Plus] Match report saved: {path}");
+                            } catch(Exception e) {
+                                Plugin.Log.Error(e, "auto export failed");
+                            }
+                        });
                     }
 
                     //add delay to refresh to ensure all player payloads are received
@@ -181,6 +207,9 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
         CurrentMatch.LocalPlayer ??= Plugin.GameState.CurrentPlayer;
         CurrentMatch.DataCenter ??= Plugin.GameState.DataCenterName;
         CurrentMatch.PlayerCount = results.PlayerCount;
+        CurrentMatch.WolfMarks = results.WolfMarks;
+        CurrentMatch.SeriesXP = results.SeriesXP;
+        CurrentMatch.JobXP = results.JobXP;
 
         var addTeamStats = (FrontlineResultsPacket.TeamStat teamStat, FrontlineTeamName name) => {
             CurrentMatch.Teams.Add(name, new() {

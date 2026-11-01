@@ -22,6 +22,8 @@ public class Configuration : IPluginConfiguration {
     public bool? EnableTimelineCC { get; set; }
     public bool? EnableActionAnalyticsCC { get; set; }
     public bool? EnableTimelineFL { get; set; }
+    public bool? EnableCombatLogFL { get; set; }
+    public bool? AutoExportFLMatchHtml { get; set; }
     public bool? EnableTimelineRW { get; set; }
 
     public bool? DisableMatchGuardsRW { get; set; }

@@ -1,5 +1,6 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Bindings.ImPlot;
+using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Components;
 using Dalamud.Interface.Utility;
@@ -99,6 +100,38 @@ internal class FrontlineMatchDetail : MatchDetail<FrontlineMatch> {
         _teamScoreboard = match.GetTeamScoreboards();
         _playerContributions = match.GetPlayerContributions();
         _triggerSort = true;
+    }
+
+    protected override int ExtraFunctionCount => 2;
+
+    protected override void DrawExtraFunctions() {
+        ImGui.SameLine();
+        using(_ = ImRaii.PushFont(UiBuilder.IconFont)) {
+            if(ImGui.Button($"{FontAwesomeIcon.FileExport.ToIconString()}##--ExportHtml")) {
+                var match = Match;
+                Task.Run(async () => {
+                    var path = await Plugin.Exporter.ExportFrontlineMatchHtml(match);
+                    if(path != null) {
+                        Plugin.ChatGui.Print($"[FLStats Plus] Exported to {path}");
+                        Plugin.Exporter.OpenFile(path);
+                    }
+                });
+            }
+        }
+        ImGuiHelper.WrappedTooltip("Export match report (HTML) and open it");
+        ImGui.SameLine();
+        using(_ = ImRaii.PushFont(UiBuilder.IconFont)) {
+            if(ImGui.Button($"{FontAwesomeIcon.FileCode.ToIconString()}##--ExportJson")) {
+                var match = Match;
+                Task.Run(async () => {
+                    var path = await Plugin.Exporter.ExportFrontlineJson([match]);
+                    if(path != null) {
+                        Plugin.ChatGui.Print($"[FLStats Plus] Exported to {path}");
+                    }
+                });
+            }
+        }
+        ImGuiHelper.WrappedTooltip("Export match data (JSON, includes your combat log)");
     }
 
     public override void Draw() {

@@ -64,6 +64,9 @@ internal abstract class MatchCacheService<T> where T : PvpMatch {
             _matches.Add(match);
         }
         await UpdateToStorage(match);
+        if(match.IsCompleted) {
+            Plugin.Ipc.OnMatchCompleted(match.Id.ToString());
+        }
     }
 
     internal async Task UpdateMatches(IEnumerable<T> matches) {

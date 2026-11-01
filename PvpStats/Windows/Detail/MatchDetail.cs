@@ -1,4 +1,4 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility.Raii;
@@ -57,7 +57,7 @@ internal abstract class MatchDetail<T> : Window where T : PvpMatch {
 
     protected void DrawFunctions() {
         //need to increment this for each function
-        int functionCount = 3;
+        int functionCount = 3 + ExtraFunctionCount;
         //get width of strip
         using(_ = ImRaii.PushFont(UiBuilder.IconFont)) {
             var buttonWidth = ImGui.GetStyle().FramePadding.X * 2 + ImGui.CalcTextSize(FontAwesomeIcon.Search.ToIconString()).X;
@@ -91,7 +91,12 @@ internal abstract class MatchDetail<T> : Window where T : PvpMatch {
         }
         ImGuiHelper.WrappedTooltip("Set tags");
         Plugin.WindowManager.SetTagsPopup(Match, Cache, ref _popupOpen);
+        DrawExtraFunctions();
     }
+
+    /// <summary>Number of extra icon buttons drawn by <see cref="DrawExtraFunctions"/>.</summary>
+    protected virtual int ExtraFunctionCount => 0;
+    protected virtual void DrawExtraFunctions() { }
 
     protected void SetWindowSize(Vector2 size) {
         SizeCondition = ImGuiCond.Always;

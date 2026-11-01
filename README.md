@@ -1,37 +1,91 @@
-# PvP Tracker
-<img src="https://raw.githubusercontent.com/wrath16/PvpStats/master/images/icon.png" width="256" height="256">
+# FLStats Plus
 
-[![Download count](https://img.shields.io/endpoint?url=https://qzysathwfhebdai6xgauhz4q7m0mzmrf.lambda-url.us-east-1.on.aws/PvpStats)](https://github.com/wrath16/PvpStats)
+A Dalamud plugin for FFXIV PvP stats. It's a fork of [PvP Tracker (PvpStats)](https://github.com/wrath16/PvpStats) by SaMo, so it keeps **everything PvpStats does** for Crystalline Conflict, Frontline and Rival Wings, and adds:
 
-Final Fantasy XIV Dalamud plugin for recording PvP match history.
+- **Frontline personal combat log** – every skill you hit with, who you hit, for how much (crit / direct hit / block / parry), every hit you took and from whom, DoT/HoT ticks, your kills and deaths with the killing blow.
+- **HTML match reports** – one self-contained `.html` file per match or for your whole history. Opens in any browser, works offline, and can be shared or downloaded.
+- **JSON and CSV export** of full 72-player scoreboards and your combat log.
+- **Saves data PvpStats throws away** – Wolf Marks, Series XP and Job XP per match.
+- **Better IPC** for other plugins (see below).
 
-## Examples
-![image](https://raw.githubusercontent.com/wrath16/PvpStats/master/images/example1.PNG)
-![image](https://raw.githubusercontent.com/wrath16/PvpStats/master/images/example2.PNG)
-![image](https://raw.githubusercontent.com/wrath16/PvpStats/master/images/example3.PNG)
+## Commands
 
-## Usage Instructions
-* Install from main Dalamud repo.
-* Matches are recorded automatically.
-* Enter `/ccstats` to open the Crystalline Conflict stats window.
-* Enter `/flstats` to open the Frontline stats window.
-* Enter `/rwstats` to open the Rival Wings stats window.
-* Enter `/lastmatch` to open the most recent match details window of any game mode.
-* Enter `/pvpstatsconfig` or press the gear on the plugin description to access various settings.
+Renamed from PvpStats so both plugins can be installed side by side.
 
-## Known Issues
-* Spectated Crystalline Conflict matches are not recorded.
-* Rematches in Crystalline Conflict custom matches are not recorded.
-* Crystalline Conflict matches that you reload into just as they are ending are not recorded.
-* Rival Wings matches that end between 14:51 and 14:59 have skewed match timeline timestamps by a few seconds.
-* Rival Wings matches recorded before v2.3.0.0 may have incorrect merc counts.
-* Rival Wings matches recorded prior to game version 7.0 may have incorrect ceruleum counts for players with >255.
-* Rival Wings matches recorded during game version 7.2 and prior to v2.3.4.1 have incorrect alliance Soaring stacks.
-* Text may be clipped in some cases if using non-standard font settings.
+| Command | What it does |
+|---|---|
+| `/flp` | Launcher |
+| `/flpfl` · `/flpcc` · `/flprw` | Frontline / Crystalline Conflict / Rival Wings tracker |
+| `/flplast` | Details of your last match |
+| `/flpconfig` | Settings |
+| `/flpexport` | Export your last Frontline match as HTML and open it |
+| `/flpexport all` | Export your whole Frontline history as one HTML report |
+| `/flpexport json` · `/flpexport csv` | Whole Frontline history as JSON / CSV |
+| `/flpexport folder` | Open the export folder |
 
-## Feature Roadmap
-May or may not eventually get implemented:
-* More stats.
-* More localization.
-* UI improvements.
-* Performance and reliability improvements.
+There are also export buttons in the **Frontline tracker** (exports whatever your filters currently show) and in each **Frontline match details** window. Under *Settings → Enhanced Tracking Features* you can turn the combat log on or off and auto-export a report after every match.
+
+Exports go to `%AppData%\XIVLauncher\pluginConfigs\FLStatsPlus\exports\`.
+
+## The HTML report
+
+Tabs, all with the same filters (map, your job, result, dates, tags, favorites, another player as teammate/opponent):
+
+- **Matches** – your match list. Click one to open it.
+- **Summary** – placements, average place, KDA, kill participation, average performance (per match / per minute / median team contribution), jobs, maps, placement trend over time, teammates' and opponents' jobs, top teammates and opponents, Wolf Marks and Series XP earned.
+- **Records** – streaks, longest/shortest match, combat-point records, momentary lead/deficit, fastest Battle High V, biggest Battle High chain, most of every stat (total and per minute), plus combat-log records (biggest hit, most killing blows, best crit rate).
+- **Jobs** / **Players** – PvpStats' job and player tables, for you, teammates, opponents or everyone, with heat-map colouring.
+- **Meta** – how evenly teams share kills, damage and healing (top-1 / top-4 share and Gini coefficient).
+- **Combat** – your skills across all logged matches, skills used on you, damage and kills by enemy job, players you hit most and players who hit you most.
+- **Match Detail** – team points breakdown, team points and Battle High graphs, full 72-player scoreboard (grouped by team or alliance, totals, % of team), and your combat log: damage timeline, death and kill recaps, skill → target drill-down, and a filterable full log you can download as CSV.
+
+**Merge export…** loads another FLStats Plus export (for example from another character) into the same view.
+
+A history report embeds the raw combat log when it has 25 matches or fewer. Above that it embeds per-match combat summaries only, to keep the file small. Single-match reports always include the full log.
+
+## What the combat log can and can't see
+
+The log records events **involving you**. The game only sends your client events for players near you, so you cannot see fights elsewhere on the map. The end-of-match scoreboard still covers all 72 players. Logged damage can be higher than the scoreboard's "damage to PCs", because the log also counts hits on NPCs and objects.
+
+## IPC (for other plugins)
+
+| Gate | Type | Notes |
+|---|---|---|
+| `FLStatsPlus.OnMatchSaved` | message `(string id)` | Fires when a match **starts** (inherited from PvpStats) |
+| `FLStatsPlus.OnMatchCompleted` | message `(string id)` | Fires when a completed match is saved (final scoreboard). It also fires again if the match is edited, for example by tags or favorites. |
+| `FLStatsPlus.OpenMatchDetailsWindow` | func `(string id) → bool` | |
+| `FLStatsPlus.GetMatchJson` | func `(string id) → string?` | Frontline matches use the export schema, including the combat log |
+| `FLStatsPlus.ExportMatchHtml` | func `(string id) → string?` | Writes the HTML report and returns its path |
+
+The data format is described in [`docs/EXPORT_SCHEMA.md`](docs/EXPORT_SCHEMA.md).
+
+## Building
+
+You need the .NET 10 SDK and Dalamud's dev files (installed by XIVLauncher with Dalamud, or set `DALAMUD_HOME`).
+
+```
+dotnet build FLStatsPlus.sln -c Release
+```
+
+The plugin zip is at `PvpStats/bin/Release/FLStatsPlus/latest.zip`. To test in game, add the folder containing `FLStatsPlus.dll` under *Dalamud Settings → Experimental → Dev Plugin Locations*.
+
+GitHub Actions (`.github/workflows/build.yml`) builds every push and uploads the zip as an artifact.
+
+### Previewing the report template without the game
+
+```
+python3 tools/make_sample_report.py PvpStats/Export/report_template.html sample.html 60
+```
+
+## Status / to verify in game
+
+This first version was written without access to a compiler or the game, so check these before you rely on it:
+
+1. It compiles (push to GitHub to let the workflow build it, or build locally).
+2. The combat log fills in during a Frontline match. Check by exporting a match and looking at the Combat Log section.
+3. Crit and direct-hit flags look right. They use Death Recap's bit layout.
+4. The killing blow is attributed to the right hit. It is matched to the last hit on the same player within 5 seconds of the death.
+
+## Credits
+
+Based on PvP Tracker (PvpStats) by SaMo. See `NOTICE.md`. The original README is in `docs/PvpStats_README.md`.

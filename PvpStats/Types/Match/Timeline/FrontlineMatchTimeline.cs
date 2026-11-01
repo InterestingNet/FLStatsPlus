@@ -1,4 +1,4 @@
-﻿using PvpStats.Types.Event.Frontline;
+using PvpStats.Types.Event.Frontline;
 using System;
 using System.Collections.Generic;
 
@@ -7,6 +7,8 @@ internal class FrontlineMatchTimeline : PvpMatchTimeline {
 
     public Dictionary<FrontlineTeamName, List<TeamPointsEvent>>? TeamPoints { get; set; }
     public List<BattleHighLevelEvent>? SelfBattleHigh { get; set; }
+    /// <summary>FLStatsPlus: every hit you dealt / took, DoT/HoT ticks and kills/deaths.</summary>
+    public List<CombatLogEntry>? SelfCombatLog { get; set; }
     public FrontlineMatchTimeline() : base() {
 
     }

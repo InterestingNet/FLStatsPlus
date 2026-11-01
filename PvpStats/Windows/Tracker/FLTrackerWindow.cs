@@ -1,4 +1,4 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using PvpStats.Types.Match;
@@ -6,7 +6,9 @@ using PvpStats.Windows.Filter;
 using PvpStats.Windows.List;
 using PvpStats.Windows.Records;
 using PvpStats.Windows.Summary;
+using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 
 namespace PvpStats.Windows.Tracker;
 internal class FLTrackerWindow : TrackerWindow<FrontlineMatch> {
@@ -18,6 +20,39 @@ internal class FLTrackerWindow : TrackerWindow<FrontlineMatch> {
     private readonly FrontlinePlayerList _players;
     private readonly FrontlineMeta _meta;
     private readonly FrontlinePvPProfile _profile;
+
+    private void DrawExportBar() {
+        var filtered = _matches.DataModel;
+        ImGui.TextDisabled($"Export {filtered.Count} filtered match(es):");
+        ImGui.SameLine();
+        if(ImGui.SmallButton("HTML report##flpExportHtml")) {
+            var list = filtered.ToList();
+            Task.Run(async () => Report(await Plugin.Exporter.ExportFrontlineHistoryHtml(list), true));
+        }
+        ImGui.SameLine();
+        if(ImGui.SmallButton("JSON##flpExportJson")) {
+            var list = filtered.ToList();
+            Task.Run(async () => Report(await Plugin.Exporter.ExportFrontlineJson(list), false));
+        }
+        ImGui.SameLine();
+        if(ImGui.SmallButton("CSV##flpExportCsv")) {
+            var list = filtered.ToList();
+            Task.Run(async () => Report(await Plugin.Exporter.ExportFrontlineCsv(list), false));
+        }
+        ImGui.SameLine();
+        if(ImGui.SmallButton("Open folder##flpExportFolder")) {
+            Plugin.Exporter.OpenExportFolder();
+        }
+    }
+
+    private void Report(string? path, bool open) {
+        if(path == null) {
+            Plugin.ChatGui.PrintError("[FLStats Plus] Nothing to export.");
+            return;
+        }
+        Plugin.ChatGui.Print($"[FLStats Plus] Exported to {path}");
+        if(open) Plugin.Exporter.OpenFile(path);
+    }
 
     public FLTrackerWindow(Plugin plugin) : base(plugin, plugin.FLStatsEngine, plugin.Configuration.FLWindowConfig, "Frontline Tracker") {
         SizeConstraints = new WindowSizeConstraints {
@@ -65,6 +100,7 @@ internal class FLTrackerWindow : TrackerWindow<FrontlineMatch> {
 
     public override void DrawInternal() {
         DrawFilters();
+        DrawExportBar();
 
         using(var tabBar = ImRaii.TabBar("TabBar", ImGuiTabBarFlags.None)) {
             if(tabBar) {

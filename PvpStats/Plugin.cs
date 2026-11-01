@@ -19,17 +19,18 @@ using System.Threading.Tasks;
 namespace PvpStats;
 
 public sealed class Plugin : IDalamudPlugin {
-    public string Name => "PvpStats";
+    public string Name => "FLStatsPlus";
 
     internal const string DatabaseName = "data.db";
 
-    private const string SplashCommandName = "/pvpstats";
-    private const string CCStatsCommandName = "/ccstats";
-    private const string FLStatsCommandName = "/flstats";
-    private const string RWStatsCommandName = "/rwstats";
-    private const string DebugCommandName = "/pvpstatsdebug";
-    private const string ConfigCommandName = "/pvpstatsconfig";
-    private const string LastMatchCommandName = "/lastmatch";
+    private const string SplashCommandName = "/flp";
+    private const string CCStatsCommandName = "/flpcc";
+    private const string FLStatsCommandName = "/flpfl";
+    private const string RWStatsCommandName = "/flprw";
+    private const string DebugCommandName = "/flpdebug";
+    private const string ConfigCommandName = "/flpconfig";
+    private const string LastMatchCommandName = "/flplast";
+    private const string ExportCommandName = "/flpexport";
 
     internal static IPluginLog Log2;
 
@@ -65,6 +66,7 @@ public sealed class Plugin : IDalamudPlugin {
     internal LocalizationService Localization { get; init; }
     internal IpcService Ipc { get; init; }
     internal StorageService Storage { get; init; }
+    internal ExportService Exporter { get; init; }
     internal CCMatchCacheService CCCache { get; init; }
     internal FLMatchCacheService FLCache { get; init; }
     internal RWMatchCacheService RWCache { get; init; }
@@ -129,6 +131,7 @@ public sealed class Plugin : IDalamudPlugin {
             CCCache = new(this);
             FLCache = new(this);
             RWCache = new(this);
+            Exporter = new(this);
             Functions = new(this);
             GameState = new(this);
             AtkNodeService = new(this);
@@ -173,6 +176,9 @@ public sealed class Plugin : IDalamudPlugin {
             CommandManager.AddHandler(LastMatchCommandName, new CommandInfo(OnLastMatchCommand) {
                 HelpMessage = "Opens match details window of last played match."
             });
+            CommandManager.AddHandler(ExportCommandName, new CommandInfo(OnExportCommand) {
+                HelpMessage = "Export Frontline data. /flpexport → last match as HTML. /flpexport all → full Frontline history as HTML. /flpexport json | csv → full history as JSON/CSV. /flpexport folder → open export folder."
+            });
 
 #if DEBUG
             CommandManager.AddHandler(DebugCommandName, new CommandInfo(OnDebugCommand) {
@@ -195,9 +201,16 @@ public sealed class Plugin : IDalamudPlugin {
         Log.Debug("disposing plugin");
 #endif
 
+        CommandManager.RemoveHandler(SplashCommandName);
         CommandManager.RemoveHandler(CCStatsCommandName);
         CommandManager.RemoveHandler(FLStatsCommandName);
+        CommandManager.RemoveHandler(RWStatsCommandName);
         CommandManager.RemoveHandler(ConfigCommandName);
+        CommandManager.RemoveHandler(LastMatchCommandName);
+        CommandManager.RemoveHandler(ExportCommandName);
+#if DEBUG
+        CommandManager.RemoveHandler(DebugCommandName);
+#endif
 
         Functions?.Dispose();
         CCMatchManager?.Dispose();
@@ -234,6 +247,33 @@ public sealed class Plugin : IDalamudPlugin {
             var lastMatch = matches.OrderByDescending(x => x.DutyStartTime).FirstOrDefault();
             if(lastMatch != null) {
                 WindowManager.OpenMatchDetailsWindow(lastMatch);
+            }
+        });
+    }
+
+    private void OnExportCommand(string command, string args) {
+        var arg = args.Trim().ToLowerInvariant();
+        Task.Run(async () => {
+            try {
+                string? path = arg switch {
+                    "" or "last" => await Exporter.ExportLastFrontlineMatchHtml(),
+                    "all" or "history" => await Exporter.ExportFrontlineHistoryHtml(Exporter.AllFrontlineMatches()),
+                    "json" => await Exporter.ExportFrontlineJson(Exporter.AllFrontlineMatches()),
+                    "csv" => await Exporter.ExportFrontlineCsv(Exporter.AllFrontlineMatches()),
+                    "folder" => Exporter.OpenExportFolder(),
+                    _ => null,
+                };
+                if(arg is not ("folder")) {
+                    if(path != null) {
+                        ChatGui.Print($"[FLStats Plus] Exported to {path}");
+                        Exporter.OpenFile(path);
+                    } else {
+                        ChatGui.PrintError("[FLStats Plus] Nothing to export. Usage: /flpexport [last|all|json|csv|folder]");
+                    }
+                }
+            } catch(Exception e) {
+                Log.Error(e, "export failed");
+                ChatGui.PrintError($"[FLStats Plus] Export failed: {e.Message}");
             }
         });
     }

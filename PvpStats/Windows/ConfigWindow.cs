@@ -1,4 +1,4 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
@@ -650,6 +650,20 @@ internal class ConfigWindow : Window {
         bool enableActionAnalyticsCC = _plugin.Configuration.EnableActionAnalyticsCC ?? true;
         if(ImGui.Checkbox("Crystalline Conflict Action Tracking", ref enableActionAnalyticsCC)) {
             _plugin.Configuration.EnableActionAnalyticsCC = enableActionAnalyticsCC;
+            _plugin.DataQueue.QueueDataOperation(() => {
+                _plugin.Configuration.Save();
+            });
+        }
+        bool enableCombatLogFL = _plugin.Configuration.EnableCombatLogFL ?? true;
+        if(ImGui.Checkbox("Frontline Personal Combat Log (requires timeline tracking)", ref enableCombatLogFL)) {
+            _plugin.Configuration.EnableCombatLogFL = enableCombatLogFL;
+            _plugin.DataQueue.QueueDataOperation(() => {
+                _plugin.Configuration.Save();
+            });
+        }
+        bool autoExportFL = _plugin.Configuration.AutoExportFLMatchHtml ?? false;
+        if(ImGui.Checkbox("Auto-export Frontline match report (HTML) after each match", ref autoExportFL)) {
+            _plugin.Configuration.AutoExportFLMatchHtml = autoExportFL;
             _plugin.DataQueue.QueueDataOperation(() => {
                 _plugin.Configuration.Save();
             });

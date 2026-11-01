@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FLStats Plus — Frontline Report</title>
+<style>
+:root{
+  --bg:#0c0e13;--panel:rgba(21,23,31,.94);--panel2:rgba(33,36,47,.92);--panel3:#14161d;
+  --gold:#c9a95c;--gold2:#e8d39a;--line:#3a3528;--line2:rgba(58,53,40,.55);--text:#e9e4d6;--dim:#9a937f;
+  --Maelstrom:#d0453f;--Adders:#d9b53c;--Flames:#4b8fd6;
+  --dmg:#e2774a;--heal:#6fcf7e;--crit:#f0c54a;--dh:#7fb6f0;--bad:#c85a5a;--good:#5fb87a;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+html{background:var(--bg)}
+body{background:radial-gradient(ellipse at top,#1b1f2e 0%,var(--bg) 62%) fixed;color:var(--text);font:13.5px/1.45 "Segoe UI",system-ui,sans-serif;min-height:100vh}
+.wrap{max-width:1320px;margin:0 auto;padding:18px 14px 70px}
+h1,h2,h3{font-family:"Trajan Pro","Cinzel",Georgia,serif;letter-spacing:.05em;margin:0;font-weight:600}
+a{color:var(--gold2)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.top h1{font-size:22px;color:var(--gold2)}
+.top .sub{color:var(--dim);font-size:12px}
+nav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:8px}
+nav button{background:none;border:1px solid var(--line);color:var(--dim);padding:6px 14px;border-radius:3px;cursor:pointer;font:inherit;font-size:12.5px;letter-spacing:.04em}
+nav button.on{color:#1a1609;background:linear-gradient(180deg,var(--gold2),var(--gold));border-color:var(--gold)}
+nav button:hover:not(.on){border-color:var(--gold);color:var(--text)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:inset 0 0 0 1px rgba(201,169,92,.10),0 6px 22px rgba(0,0,0,.4);margin-bottom:14px}
+.panel>header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(201,169,92,.13),rgba(201,169,92,0))}
+.panel>header h2{font-size:14px;color:var(--gold2)}
+.panel .body{padding:12px 14px}
+.scroll{overflow:auto;max-height:620px}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px}
+.filters label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;display:flex;flex-direction:column;gap:3px}
+input,select,button.btn{background:var(--panel3);color:var(--text);border:1px solid var(--line);border-radius:3px;padding:5px 8px;font:inherit;font-size:12px}
+button.btn{cursor:pointer;color:var(--gold2)}button.btn:hover{border-color:var(--gold)}
+button.btn.on{background:var(--gold);color:#1a1609}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.tile{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:8px 11px}
+.tile .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.tile .v{font-size:20px;font-weight:600;margin-top:1px;font-variant-numeric:tabular-nums}
+.tile .s{font-size:11px;color:var(--dim)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);text-align:right;padding:6px 7px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;white-space:nowrap;background:#191b23}
+.scroll th{position:sticky;top:0;z-index:1}
+th.l,td.l{text-align:left}
+td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--line2);white-space:nowrap}
+tr.click{cursor:pointer}tr.click:hover td{background:rgba(201,169,92,.07)}
+tr.sel td{background:rgba(201,169,92,.15)}
+tr.you td{box-shadow:inset 0 0 0 9999px rgba(232,211,154,.10);font-weight:600}
+tr.teamrow td{font-weight:600;border-top:1px solid var(--line)}
+.bar{position:relative;height:6px;background:rgba(255,255,255,.06);border-radius:3px;min-width:70px;display:inline-block;width:90px;vertical-align:middle;margin-left:6px}
+.bar i{position:absolute;inset:0 auto 0 0;border-radius:3px}
+.pill{display:inline-block;font-size:10.5px;padding:0 5px;border-radius:2px;border:1px solid var(--line);color:var(--dim);margin-left:4px}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.t-Maelstrom{color:var(--Maelstrom)}.t-Adders{color:var(--Adders)}.t-Flames{color:var(--Flames)}
+.place{font-family:Georgia,serif;font-weight:700}
+.p1{color:var(--gold2)}.p2{color:#c9c9c9}.p3{color:#b07a52}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:980px){.grid2,.grid3{grid-template-columns:1fr}}
+.dim{color:var(--dim)}.dmg{color:var(--dmg)}.heal{color:var(--heal)}.bad{color:var(--bad)}.good{color:var(--good)}
+.note{font-size:11.5px;color:var(--dim);margin-top:6px}
+.empty{padding:22px;text-align:center;color:var(--dim)}
+.hero{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;padding:16px 18px}
+.hero h1{font-size:24px;color:var(--gold2)}
+.bigplace{font-family:Georgia,serif;font-size:46px;line-height:1;text-align:right}
+.bigplace small{display:block;font-size:11px;color:var(--dim);letter-spacing:.12em;font-family:"Segoe UI",sans-serif}
+svg text{fill:var(--dim);font-size:10px;font-family:"Segoe UI",sans-serif}
+.chart{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;font-size:11.5px;color:var(--dim);margin-top:4px;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.tooltip{position:fixed;pointer-events:none;background:#0b0c10;border:1px solid var(--gold);border-radius:3px;padding:5px 8px;font-size:12px;z-index:50;display:none;max-width:320px}
+.deathbox{background:var(--panel3);border:1px solid var(--line);border-radius:4px;padding:10px;margin-top:10px;font-size:12px}
+.flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.right{margin-left:auto}
+.hidden{display:none!important}
+footer{color:var(--dim);font-size:11px;text-align:center;margin-top:26px}
+.heat{border-radius:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div><h1>FLStats Plus</h1><div class="sub" id="subtitle"></div></div>
+    <div class="flex">
+      <button class="btn" id="btnJson" title="Download the filtered matches as JSON">Download JSON</button>
+      <button class="btn" id="btnCsv" title="Download the filtered scoreboards as CSV">Download CSV</button>
+      <label class="btn" title="Combine another FLStats Plus export (e.g. another character) into this view">Merge export…<input type="file" id="mergeFile" accept=".html,.json" hidden></label>
+    </div>
+  </div>
+  <nav id="nav"></nav>
+  <section class="panel" id="filterPanel"><div class="filters" id="filters"></div></section>
+  <main id="view"></main>
+  <footer id="footer"></footer>
+</div>
+<div class="tooltip" id="tip"></div>
+
+<!-- The plugin replaces the placeholder below with the report JSON. -->
+<script id="report-data" type="application/json">/*__FLSTATS_DATA__*/null</script>
+
+<script>
+"use strict";
+/* ═══════════════════════════ data ═══════════════════════════ */
+function loadReport(){
+  const raw=document.getElementById('report-data').textContent.trim();
+  try{const r=JSON.parse(raw);if(r&&r.matches)return r;}catch(e){}
+  if(window.FLSTATS_SAMPLE)return window.FLSTATS_SAMPLE;
+  return {schema:1,plugin:"FLStats Plus",generated:new Date().toISOString(),mode:"history",matches:[]};
+}
+const R=loadReport();
+const TEAMS=["Maelstrom","Adders","Flames"];
+const ALLI=["A","B","C"];
+const STATS=[["kills","Kills"],["deaths","Deaths"],["assists","Assists"],["damageToPCs","Damage to PCs"],["damageToOther","Damage to Other"],["damageTaken","Damage Taken"],["hpRestored","HP Restored"]];
+
+function prep(m){
+  m._t=new Date(m.start).getTime();
+  m._min=Math.max(m.durationSec,1)/60;
+  m._you=m.players.find(p=>p.isYou)||null;
+  m._team=m._you?m._you.team:null;
+  const t=m._team&&m.teams[m._team];
+  m._place=t&&t.placement!=null?t.placement:null;     // 0-based
+  m._teamTot={};
+  for(const tn of Object.keys(m.teams)){
+    const ps=m.players.filter(p=>p.team===tn);const tot={size:ps.length};
+    for(const [k] of STATS)tot[k]=ps.reduce((a,p)=>a+(p[k]||0),0);
+    m._teamTot[tn]=tot;
+  }
+  m._key=(m.map||m.mapName)+"|"+Math.round(m._t/60000);
+  return m;
+}
+let ALL=R.matches.map(prep).sort((a,b)=>a._t-b._t);
+
+/* ═══════════════════════════ helpers ═══════════════════════════ */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(n,d=0)=>n==null||isNaN(n)?"—":Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+const kfmt=n=>n==null||isNaN(n)?"—":Math.abs(n)>=1e6?(n/1e6).toFixed(2)+"M":Math.abs(n)>=1e4?(n/1e3).toFixed(1)+"k":fmt(n);
+const pct=(x,d=1)=>x==null||isNaN(x)||!isFinite(x)?"—":(x*100).toFixed(d)+"%";
+const mmss=s=>{if(s==null||isNaN(s))return"—";s=Math.max(0,Math.round(s));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`};
+const dt=t=>new Date(t).toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+const placeTxt=p=>p==null?"—":`<span class="place p${p+1}">${["1st","2nd","3rd"][p]||p+1}</span>`;
+const teamTxt=t=>t?`<span class="t-${t}">●</span> ${esc(t)}`:"—";
+const median=a=>{if(!a.length)return NaN;const s=[...a].sort((x,y)=>x-y),h=s.length>>1;return s.length%2?s[h]:(s[h-1]+s[h])/2};
+const sum=(a,f)=>a.reduce((x,y)=>x+(f?f(y):y),0);
+const safeDiv=(a,b)=>b?a/b:NaN;
+function bar(v,max,color){return `<span class="bar"><i style="width:${max?Math.min(100,v/max*100).toFixed(1):0}%;background:${color}"></i></span>`}
+function dl(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();}
+function csvRow(a){return a.map(c=>{c=c==null?"":String(c);return /[",\n]/.test(c)?`"${c.replace(/"/g,'""')}"`:c}).join(",")}
+const tip=$('#tip');
+function showTip(e,html){tip.innerHTML=html;tip.style.display='block';tip.style.left=Math.min(e.clientX+14,innerWidth-330)+'px';tip.style.top=(e.clientY+14)+'px'}
+function hideTip(){tip.style.display='none'}
+
+/* Generic sortable table.  cols: {k,label,l(left),fmt(v,row),heat:'hi'|'lo',title} */
+function table(host,rows,cols,opt={}){
+  let sortK=opt.sort||cols.find(c=>c.def)?.k||cols[0].k,dir=opt.dir??-1;
+  const wrap=document.createElement('div');host.innerHTML='';host.appendChild(wrap);
+  const draw=()=>{
+    const sorted=sortK==='__none'?[...rows]:[...rows].sort((a,b)=>{const x=a[sortK],y=b[sortK];if(x==null||Number.isNaN(x))return 1;if(y==null||Number.isNaN(y))return -1;return(x>y?1:x<y?-1:0)*dir});
+    const ranges={};
+    cols.filter(c=>c.heat).forEach(c=>{const v=rows.map(r=>r[c.k]).filter(x=>typeof x==='number'&&isFinite(x));ranges[c.k]=[Math.min(...v),Math.max(...v)]});
+    const heat=(c,v)=>{if(!c.heat||typeof v!=='number'||!isFinite(v))return'';const[a,b]=ranges[c.k];if(b<=a)return'';let f=(v-a)/(b-a);if(c.heat==='lo')f=1-f;
+      const col=f>=.5?`rgba(95,184,122,${((f-.5)*2*.32).toFixed(3)})`:`rgba(200,90,90,${((.5-f)*2*.32).toFixed(3)})`;return ` style="background:${col}"`};
+    wrap.innerHTML=`${opt.csv!==false?`<div class="flex" style="justify-content:flex-end;margin-bottom:4px"><button class="btn" data-csv>Copy CSV</button></div>`:''}
+    <div class="${opt.noscroll?'':'scroll'}"><table><thead><tr>${cols.map(c=>`<th class="${c.l?'l':''}" data-k="${c.k}" title="${esc(c.title||'')}">${c.label}${c.k===sortK?(dir<0?' ▾':' ▴'):''}</th>`).join('')}</tr></thead>
+    <tbody>${sorted.map((r,i)=>`<tr data-i="${rows.indexOf(r)}" class="${opt.onClick?'click':''} ${opt.rowClass?opt.rowClass(r):''}">${cols.map(c=>`<td class="${c.l?'l':''}"${heat(c,r[c.k])}>${c.fmt?c.fmt(r[c.k],r):esc(r[c.k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    ${rows.length?'':'<div class="empty">No data for the current filters.</div>'}`;
+    wrap.querySelectorAll('th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;if(k===sortK)dir*=-1;else{sortK=k;dir=-1}draw()});
+    if(opt.onClick)wrap.querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>opt.onClick(rows[+tr.dataset.i],tr));
+    const cb=wrap.querySelector('[data-csv]');
+    if(cb)cb.onclick=()=>{const text=[csvRow(cols.map(c=>c.label.replace(/<[^>]+>/g,''))),...sorted.map(r=>csvRow(cols.map(c=>{const v=r[c.k];return typeof v==='number'?(Number.isInteger(v)?v:v.toFixed(4)):(c.fmt?c.fmt(v,r).replace(/<[^>]+>/g,''):v)})))].join("\n");
+      navigator.clipboard?.writeText(text).then(()=>{cb.textContent='Copied ✓';setTimeout(()=>cb.textContent='Copy CSV',1200)},()=>dl('table.csv',text,'text/csv'))};
+  };
+  draw();return draw;
+}
+
+/* Line/step chart (SVG). series: [{name,color,pts:[[x,y]],step}] */
+function lineChart(series,{w=900,h=220,xmax,ymax,ymin=0,bands,markers=[],yfmt=v=>kfmt(v),xfmt=mmss}={}){
+  const P={l:44,r:10,t:10,b:22},W=w-P.l-P.r,H=h-P.t-P.b;
+  xmax=xmax??Math.max(1,...series.flatMap(s=>s.pts.map(p=>p[0])));
+  ymax=ymax??Math.max(1,...series.flatMap(s=>s.pts.map(p=>p[1])));
+  const X=x=>P.l+x/xmax*W,Y=y=>P.t+H-(y-ymin)/(ymax-ymin||1)*H;
+  let g='';
+  if(bands)bands.forEach(b=>g+=`<rect x="${P.l}" width="${W}" y="${Y(b.to)}" height="${Math.max(0,Y(b.from)-Y(b.to))}" fill="${b.color}"/><text x="${P.l+W-4}" y="${Y(b.to)+11}" text-anchor="end">${b.label}</text>`);
+  for(let i=0;i<=4;i++){const y=ymin+(ymax-ymin)*i/4;g+=`<line x1="${P.l}" x2="${P.l+W}" y1="${Y(y)}" y2="${Y(y)}" stroke="rgba(255,255,255,.06)"/><text x="${P.l-5}" y="${Y(y)+3}" text-anchor="end">${yfmt(y)}</text>`}
+  for(let i=0;i<=6;i++){const x=xmax*i/6;g+=`<text x="${X(x)}" y="${h-6}" text-anchor="middle">${xfmt(x)}</text>`}
+  for(const s of series){if(!s.pts.length)continue;let d=`M${X(s.pts[0][0])},${Y(s.pts[0][1])}`;
+    for(let i=1;i<s.pts.length;i++){const[x,y]=s.pts[i];d+=s.step?`H${X(x)}V${Y(y)}`:`L${X(x)},${Y(y)}`}
+    if(s.step)d+=`H${X(xmax)}`;g+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.width||1.8}"/>`}
+  markers.forEach(m=>g+=`<g data-tip="${esc(m.tip)}"><line x1="${X(m.x)}" x2="${X(m.x)}" y1="${P.t}" y2="${P.t+H}" stroke="${m.color||'var(--bad)'}" stroke-dasharray="3 3"/><text x="${X(m.x)}" y="${P.t+10}" text-anchor="middle" style="fill:${m.color||'var(--bad)'};font-size:12px;cursor:pointer">${m.icon||'☠'}</text></g>`);
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}">${g}</svg>`;
+}
+function bindTips(root){root.querySelectorAll('[data-tip]').forEach(n=>{n.onmousemove=e=>showTip(e,n.dataset.tip);n.onmouseleave=hideTip})}
+
+/* ═══════════════════════════ filters ═══════════════════════════ */
+const F={map:"",job:"",result:"",from:"",to:"",fav:false,tag:"",player:"",with:"any",src:"you",minMatches:3,search:""};
+function buildFilters(){
+  const maps=[...new Set(ALL.map(m=>m.mapName))].sort();
+  const jobs=[...new Set(ALL.map(m=>m._you?.job).filter(Boolean))].sort();
+  $('#filters').innerHTML=`
+   <label>Map<select id="fMap"><option value="">All maps</option>${maps.map(m=>`<option ${F.map===m?'selected':''}>${esc(m)}</option>`).join('')}</select></label>
+   <label>Your job<select id="fJob"><option value="">All jobs</option>${jobs.map(j=>`<option ${F.job===j?'selected':''}>${j}</option>`).join('')}</select></label>
+   <label>Result<select id="fRes"><option value="">Any</option><option value="0">1st</option><option value="1">2nd</option><option value="2">3rd</option></select></label>
+   <label>From<input type="date" id="fFrom" value="${F.from}"></label>
+   <label>To<input type="date" id="fTo" value="${F.to}"></label>
+   <label>Tag contains<input id="fTag" value="${esc(F.tag)}" placeholder="tag" size="9"></label>
+   <label>Other player<input id="fPlayer" value="${esc(F.player)}" placeholder="name" size="12"></label>
+   <label>…as<select id="fWith"><option value="any">teammate or opponent</option><option value="team">teammate</option><option value="opp">opponent</option></select></label>
+   <label>&nbsp;<button class="btn ${F.fav?'on':''}" id="fFav">★ Favorites</button></label>
+   <label>&nbsp;<button class="btn" id="fReset">Reset</button></label>
+   <span class="right dim" id="fCount"></span>`;
+  $('#fRes').value=F.result;$('#fWith').value=F.with;
+  const bind=(id,k,ev='change')=>$(id).addEventListener(ev,e=>{F[k]=e.target.value;refresh()});
+  bind('#fMap','map');bind('#fJob','job');bind('#fRes','result');bind('#fFrom','from');bind('#fTo','to');bind('#fTag','tag','input');bind('#fPlayer','player','input');bind('#fWith','with');
+  $('#fFav').onclick=()=>{F.fav=!F.fav;$('#fFav').classList.toggle('on',F.fav);refresh()};
+  $('#fReset').onclick=()=>{Object.assign(F,{map:"",job:"",result:"",from:"",to:"",fav:false,tag:"",player:"",with:"any"});buildFilters();refresh()};
+}
+function filtered(){
+  const from=F.from?new Date(F.from+"T00:00").getTime():-Infinity,to=F.to?new Date(F.to+"T23:59:59").getTime():Infinity;
+  const pq=F.player.trim().toLowerCase();
+  return ALL.filter(m=>{
+    if(F.map&&m.mapName!==F.map)return false;
+    if(F.job&&m._you?.job!==F.job)return false;
+    if(F.result!==""&&String(m._place)!==F.result)return false;
+    if(m._t<from||m._t>to)return false;
+    if(F.fav&&!m.favorite)return false;
+    if(F.tag&&!(m.tags||"").toLowerCase().includes(F.tag.toLowerCase()))return false;
+    if(pq){const hit=m.players.filter(p=>!p.isYou&&(p.name+" "+p.world).toLowerCase().includes(pq));
+      if(!hit.length)return false;
+      if(F.with==="team"&&!hit.some(p=>p.team===m._team))return false;
+      if(F.with==="opp"&&!hit.some(p=>p.team!==m._team))return false;}
+    return true;
+  });
+}
+
+/* ═══════════════════════════ shared stat math ═══════════════════════════ */
+/* Accumulates a set of (player, match) rows into PvpStats-style totals / per-match / per-minute / median contribution. */
+function aggregate(entries){ // entries: [{p, m}]
+  const a={n:entries.length,min:0,places:[0,0,0],placeSum:0,placeN:0,teamKills:0,contrib:{},bh:[],claim:0,occ:0};
+  STATS.forEach(([k])=>{a[k]=0;a.contrib[k]=[]});
+  for(const {p,m} of entries){
+    a.min+=m._min;
+    const pl=m.teams[p.team]?.placement;if(pl!=null){a.places[pl]++;a.placeSum+=pl+1;a.placeN++}
+    const tt=m._teamTot[p.team];a.teamKills+=tt?.kills||0;
+    STATS.forEach(([k])=>{a[k]+=p[k]||0;if(tt&&tt[k])a.contrib[k].push((p[k]||0)/tt[k])});
+    if(p.maxBattleHigh!=null)a.bh.push(p.maxBattleHigh);
+    a.occ+=p.occupations||0;a.claim+=p.claimTimeSec||0;
+  }
+  a.ka=a.kills+a.assists;
+  a.kda=a.ka/Math.max(a.deaths,1);
+  a.kp=safeDiv(a.ka,a.teamKills);
+  a.dmgPerKA=safeDiv(a.damageToPCs,a.ka);
+  a.lives=a.deaths+a.n;
+  a.dmgPerLife=safeDiv(a.damageToPCs,a.lives);a.takenPerLife=safeDiv(a.damageTaken,a.lives);a.hpPerLife=safeDiv(a.hpRestored,a.lives);
+  a.avgPlace=safeDiv(a.placeSum,a.placeN);a.firstRate=safeDiv(a.places[0],a.placeN);
+  a.avgBH=a.bh.length?sum(a.bh)/a.bh.length:NaN;
+  STATS.forEach(([k])=>{a[k+"_pm"]=safeDiv(a[k],a.n);a[k+"_min"]=safeDiv(a[k],a.min);a[k+"_c"]=median(a.contrib[k])});
+  return a;
+}
+function youEntries(ms){return ms.filter(m=>m._you).map(m=>({p:m._you,m}))}
+
+/* ═══════════════════════════ views ═══════════════════════════ */
+const VIEWS=[["matches","Matches"],["summary","Summary"],["records","Records"],["jobs","Jobs"],["players","Players"],["meta","Meta"],["combat","Combat"],["match","Match Detail"]];
+let VIEW=R.mode==="match"?"match":"matches",SEL=null;
+function nav(){
+  $('#nav').innerHTML=VIEWS.map(([k,l])=>`<button data-v="${k}" class="${VIEW===k?'on':''} ${k==='match'&&!SEL?'hidden':''}">${l}</button>`).join('');
+  $('#nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;refresh()});
+}
+function openMatch(m){SEL=m;VIEW="match";refresh();scrollTo({top:0,behavior:'smooth'})}
+
+function refresh(){
+  const ms=filtered();
+  $('#fCount').textContent=`${ms.length} of ${ALL.length} matches`;
+  $('#filterPanel').classList.toggle('hidden',VIEW==="match");
+  if(VIEW==="match"&&!SEL)SEL=ms[ms.length-1]||ALL[ALL.length-1]||null;
+  nav();
+  const v=$('#view');
+  if(!ALL.length){v.innerHTML='<section class="panel"><div class="empty">This report contains no matches.</div></section>';return}
+  ({matches:viewMatches,summary:viewSummary,records:viewRecords,jobs:viewJobs,players:viewPlayers,meta:viewMeta,combat:viewCombat,match:viewMatch})[VIEW](v,ms);
+  bindTips(v);
+}
+
+/* ─────────── Matches ─────────── */
+function viewMatches(v,ms){
+  v.innerHTML=`<section class="panel"><header><h2>Matches</h2><span class="dim">click a match for its scoreboard, graphs and your combat log</span></header><div class="body" id="tbl"></div></section>`;
+  const rows=ms.map(m=>({m,t:m._t,map:m.mapName,type:m.mapType,job:m._you?.job||"",team:m._team,place:m._place,dur:m.durationSec,
+    k:m._you?.kills,d:m._you?.deaths,a:m._you?.assists,dmg:m._you?.damageToPCs,hp:m._you?.hpRestored,bh:m._you?.maxBattleHigh,
+    pts:m._team?m.teams[m._team].totalPoints:null,wm:m.wolfMarks,tags:m.tags||"",fav:m.favorite,log:!!(m.combat||m.combatSummary)}));
+  table($('#tbl'),rows,[
+    {k:'t',label:'Start Time',l:1,fmt:(v,r)=>`${r.fav?'<span style="color:var(--gold)">★</span> ':''}${dt(v)}`,def:1},
+    {k:'map',label:'Map',l:1,fmt:(v,r)=>`${esc(v)} <span class="pill">${esc(r.type)}</span>`},
+    {k:'job',label:'Job',l:1},{k:'team',label:'Team',l:1,fmt:teamTxt},{k:'place',label:'Result',fmt:placeTxt},
+    {k:'pts',label:'Team Pts',fmt:v=>fmt(v)},{k:'dur',label:'Duration',fmt:mmss},
+    {k:'k',label:'K'},{k:'d',label:'D'},{k:'a',label:'A'},{k:'dmg',label:'Dmg to PCs',fmt:kfmt},{k:'hp',label:'HP Rest.',fmt:kfmt},
+    {k:'bh',label:'Max BH',fmt:v=>v==null?'—':v},{k:'wm',label:'Wolf Marks',fmt:v=>fmt(v)},
+    {k:'log',label:'Log',fmt:v=>v?'<span class="good">✓</span>':'<span class="dim">—</span>',title:'Personal combat log recorded'},
+    {k:'tags',label:'Tags',l:1}],{sort:'t',dir:-1,onClick:r=>openMatch(r.m)});
+}
+
+/* ─────────── Summary ─────────── */
+function viewSummary(v,ms){
+  const E=youEntries(ms);if(!E.length){v.innerHTML='<section class="panel"><div class="empty">No matches with your scoreboard.</div></section>';return}
+  const A=aggregate(E);
+  const byJob={},byMap={};
+  E.forEach(e=>{(byJob[e.p.job||"?"]??=[]).push(e);(byMap[e.m.mapName]??=[]).push(e)});
+  const teamJobs={},oppJobs={},mates={},opps={};
+  for(const m of ms){if(!m._you)continue;
+    for(const p of m.players){if(p.isYou)continue;const same=p.team===m._team;
+      (same?teamJobs:oppJobs)[p.job||"?"]=((same?teamJobs:oppJobs)[p.job||"?"]||0)+1;
+      const key=p.name+" "+p.world,bag=same?mates:opps;(bag[key]??={name:p.name,world:p.world,n:0,first:0,jobs:{}});
+      bag[key].n++;if(m._place===0)bag[key].first++;bag[key].jobs[p.job]=(bag[key].jobs[p.job]||0)+1;}}
+  const fav=o=>Object.entries(o.jobs).sort((a,b)=>b[1]-a[1])[0]?.[0]||"";
+  const wm=sum(ms,m=>m.wolfMarks||0),sx=sum(ms,m=>m.seriesXP||0);
+  v.innerHTML=`
+  <section class="panel"><header><h2>Overview</h2></header><div class="body tiles">
+   ${[["Matches",fmt(A.n)],["1st",fmt(A.places[0]),pct(A.places[0]/A.placeN)],["2nd",fmt(A.places[1]),pct(A.places[1]/A.placeN)],["3rd",fmt(A.places[2]),pct(A.places[2]/A.placeN)],
+     ["Average Place",fmt(A.avgPlace,2)],["Avg Match Length",mmss(A.min*60/A.n)],["KDA",fmt(A.kda,2)],["Kill Participation",pct(A.kp)],
+     ["Avg Max Battle High",fmt(A.avgBH,1)],["Wolf Marks earned",fmt(wm)],["Series XP earned",fmt(sx)],["Time Played",(A.min/60).toFixed(1)+" h"]]
+     .map(([k,v,s])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}</div>`).join('')}
+  </div></section>
+  <section class="panel"><header><h2>Average Performance</h2><span class="dim">'Damage to Other' only counts objective damage (e.g. Shatter ice)</span></header><div class="body" id="perf"></div></section>
+  <div class="grid2">
+   <section class="panel"><header><h2>Jobs Played</h2></header><div class="body" id="jobsPlayed"></div></section>
+   <section class="panel"><header><h2>Maps</h2></header><div class="body" id="maps"></div></section>
+  </div>
+  <section class="panel"><header><h2>Placement Over Time</h2><span class="dim">rolling 1st-place rate (20 matches) and average place</span></header><div class="body" id="trend"></div></section>
+  <div class="grid2">
+   <section class="panel"><header><h2>Teammates' Jobs</h2></header><div class="body" id="tjobs"></div></section>
+   <section class="panel"><header><h2>Opponents' Jobs</h2></header><div class="body" id="ojobs"></div></section>
+  </div>
+  <div class="grid2">
+   <section class="panel"><header><h2>Top Teammates</h2><span class="dim">most matches together</span></header><div class="body" id="tmates"></div></section>
+   <section class="panel"><header><h2>Top Opponents</h2><span class="dim">most matches against</span></header><div class="body" id="topps"></div></section>
+  </div>`;
+  const perfRows=[["Per match","_pm",kfmt],["Per minute","_min",v=>fmt(v,v<100?2:0)],["Median team contribution","_c",v=>pct(v)]].map(([l,s,f])=>{const r={l};STATS.forEach(([k])=>r[k]=A[k+s]);r.f=f;return r});
+  table($('#perf'),perfRows,[{k:'l',label:'',l:1},...STATS.map(([k,l])=>({k,label:l,fmt:(v,r)=>r.f(v)}))],{csv:true,noscroll:1});
+  $('#perf').insertAdjacentHTML('beforeend',`<div class="tiles" style="margin-top:10px">${[["KDA",fmt(A.kda,2)],["Kill Participation",pct(A.kp)],["Dmg per Kill/Assist",kfmt(A.dmgPerKA)],["Dmg per Life",kfmt(A.dmgPerLife)],["Taken per Life",kfmt(A.takenPerLife)],["HP per Life",kfmt(A.hpPerLife)],["Occupations / match",fmt(A.occ/A.n,2)]].map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div>`);
+  const grp=o=>Object.entries(o).map(([k,es])=>{const g=aggregate(es);return{k,n:g.n,first:g.places[0],fr:g.firstRate,avg:g.avgPlace,kda:g.kda,dmg:g.damageToPCs_pm}});
+  table($('#jobsPlayed'),grp(byJob),[{k:'k',label:'Job',l:1},{k:'n',label:'Matches',def:1},{k:'first',label:'1st'},{k:'fr',label:'1st Rate',fmt:v=>pct(v),heat:'hi'},{k:'avg',label:'Avg Place',fmt:v=>fmt(v,2),heat:'lo'},{k:'kda',label:'KDA',fmt:v=>fmt(v,2),heat:'hi'},{k:'dmg',label:'Dmg/Match',fmt:kfmt,heat:'hi'}]);
+  table($('#maps'),grp(byMap),[{k:'k',label:'Map',l:1},{k:'n',label:'Matches',def:1},{k:'first',label:'1st'},{k:'fr',label:'1st Rate',fmt:v=>pct(v),heat:'hi'},{k:'avg',label:'Avg Place',fmt:v=>fmt(v,2),heat:'lo'},{k:'kda',label:'KDA',fmt:v=>fmt(v,2)},{k:'dmg',label:'Dmg/Match',fmt:kfmt}]);
+  // trend
+  const ordered=E.slice().sort((a,b)=>a.m._t-b.m._t),Wn=20,firstPts=[],avgPts=[];
+  ordered.forEach((e,i)=>{const w=ordered.slice(Math.max(0,i-Wn+1),i+1).filter(x=>x.m._place!=null);firstPts.push([i+1,w.filter(x=>x.m._place===0).length/(w.length||1)]);avgPts.push([i+1,sum(w,x=>x.m._place+1)/(w.length||1)])});
+  $('#trend').innerHTML=lineChart([{name:'1st rate',color:'var(--gold2)',pts:firstPts}],{h:170,ymax:1,yfmt:v=>pct(v,0),xfmt:x=>"#"+Math.round(x),xmax:Math.max(ordered.length,2)})+
+    lineChart([{name:'avg place',color:'var(--dh)',pts:avgPts}],{h:140,ymin:1,ymax:3,yfmt:v=>v.toFixed(1),xfmt:x=>"#"+Math.round(x),xmax:Math.max(ordered.length,2)})+
+    `<div class="legend"><span><i class="dot" style="background:var(--gold2)"></i>Rolling 1st-place rate</span><span><i class="dot" style="background:var(--dh)"></i>Rolling average place (lower is better)</span></div>`;
+  const jobRows=o=>{const t=sum(Object.values(o));return Object.entries(o).map(([k,n])=>({k,n,s:n/t}))};
+  table($('#tjobs'),jobRows(teamJobs),[{k:'k',label:'Job',l:1},{k:'n',label:'Count',def:1},{k:'s',label:'Share',fmt:v=>pct(v)+bar(v,.2,'var(--good)')}]);
+  table($('#ojobs'),jobRows(oppJobs),[{k:'k',label:'Job',l:1},{k:'n',label:'Count',def:1},{k:'s',label:'Share',fmt:v=>pct(v)+bar(v,.2,'var(--bad)')}]);
+  const ppl=o=>Object.values(o).map(x=>({name:x.name+" "+x.world,job:fav(x),n:x.n,first:x.first,fr:x.first/x.n})).sort((a,b)=>b.n-a.n).slice(0,50);
+  table($('#tmates'),ppl(mates),[{k:'name',label:'Name',l:1},{k:'job',label:'Fav. Job',l:1},{k:'n',label:'Matches',def:1},{k:'first',label:'1st together'},{k:'fr',label:'1st Rate',fmt:v=>pct(v),heat:'hi'}]);
+  table($('#topps'),ppl(opps),[{k:'name',label:'Name',l:1},{k:'job',label:'Fav. Job',l:1},{k:'n',label:'Matches',def:1},{k:'first',label:'Your 1st vs'},{k:'fr',label:'Your 1st Rate',fmt:v=>pct(v),heat:'hi'}]);
+}
+
+/* ─────────── Records ─────────── */
+function teamLeadSeries(m){
+  if(!m.teamPoints||!m._team)return null;
+  const times=[...new Set(Object.values(m.teamPoints).flatMap(s=>s.map(p=>p[0])))].sort((a,b)=>a-b);
+  const at=(s,t)=>{let v=0;for(const p of s){if(p[0]<=t)v=p[1];else break}return v};
+  return times.map(t=>{const mine=at(m.teamPoints[m._team]||[],t);const best=Math.max(...TEAMS.filter(x=>x!==m._team).map(x=>at(m.teamPoints[x]||[],t)));return[t,mine-best]});
+}
+function bhStats(m){
+  if(!m.battleHigh||!m.battleHigh.length)return{v:m.battleHighVTimeSec??null,spike:m.battleHighSpike??null};
+  const v=m.battleHigh.find(p=>p[1]>=100);let best=0,cur=0;
+  for(let i=1;i<m.battleHigh.length;i++){const a=m.battleHigh[i-1],b=m.battleHigh[i];
+    if(b[0]-a[0]<=5&&b[1]>a[1])cur+=b[1]-a[1];else cur=Math.max(b[1]-a[1],0);best=Math.max(best,cur)}
+  return{v:v?v[0]:(m.battleHighVTimeSec??null),spike:best||m.battleHighSpike||null};
+}
+function viewRecords(v,ms){
+  const E=youEntries(ms).sort((a,b)=>a.m._t-b.m._t);const rec=[];
+  const add=(cat,label,val,m,disp)=>{if(m)rec.push({cat,label,val,m,disp:disp??fmt(val)})};
+  let ws=0,ls=0,bw=0,bl=0,bwm=null,blm=null;
+  E.forEach(e=>{if(e.m._place===0){ws++;ls=0;if(ws>bw){bw=ws;bwm=e.m}}else{ls++;ws=0;if(ls>bl){bl=ls;blm=e.m}}});
+  add("Streaks","Longest 1st-place streak",bw,bwm,bw+" matches");add("Streaks","Longest streak without 1st",bl,blm,bl+" matches");
+  const best=(f,hi=true)=>{let b=null,bv=hi?-Infinity:Infinity;for(const e of E){const x=f(e);if(x==null||isNaN(x))continue;if(hi?x>bv:x<bv){bv=x;b=e.m}}return[bv,b]};
+  let r;
+  r=best(e=>e.m.durationSec);add("Match","Longest match",r[0],r[1],mmss(r[0]));
+  r=best(e=>e.m.durationSec,false);add("Match","Shortest match",r[0],r[1],mmss(r[0]));
+  const cp=e=>{const t=e.m.teams[e.p.team];return t?t.killPoints-t.deathPointLosses:null};
+  r=best(cp);add("Match","Highest team combat point diff.",r[0],r[1],(r[0]>0?"+":"")+fmt(r[0]));
+  r=best(cp,false);add("Match","Lowest team combat point diff.",r[0],r[1],fmt(r[0]));
+  r=best(e=>{const s=teamLeadSeries(e.m);return s?Math.max(...s.map(x=>x[1])):e.m.momentaryPointAdvantage});add("Match","Highest momentary point lead *",r[0],r[1],"+"+fmt(r[0]));
+  r=best(e=>{const s=teamLeadSeries(e.m);return s?-Math.min(...s.map(x=>x[1])):e.m.momentaryPointDeficit});add("Match","Highest momentary point deficit *",r[0],r[1],"−"+fmt(r[0]));
+  r=best(e=>bhStats(e.m).v,false);add("Battle High","Fastest Battle High V *",r[0],r[1],mmss(r[0]));
+  r=best(e=>bhStats(e.m).spike);add("Battle High","Highest Battle High chain *",r[0],r[1],"+"+fmt(r[0]));
+  STATS.forEach(([k,l])=>{r=best(e=>e.p[k]);add("Most (total)","Most "+l.toLowerCase(),r[0],r[1],k.startsWith('dam')||k==='hpRestored'?kfmt(r[0]):fmt(r[0]));
+    r=best(e=>e.p[k]/e.m._min);add("Most (per minute)","Most "+l.toLowerCase()+" / min",r[0],r[1],fmt(r[0],r[0]<100?2:0))});
+  r=best(e=>e.p.kills+e.p.assists);add("Most (total)","Most kills + assists",r[0],r[1]);
+  r=best(e=>e.p.maxBattleHigh);add("Battle High","Highest Battle High level",r[0],r[1]);
+  // combat-log records (FLStats Plus)
+  const cl=E.filter(e=>e.m.combat||e.m.combatSummary);
+  if(cl.length){
+    r=best(e=>Math.max(0,...(e.m.combatSummary?.dealt||[]).map(s=>s.maxHit)));const bm=r[1];
+    const bs=bm&&(bm.combatSummary.dealt||[]).reduce((a,b)=>b.maxHit>a.maxHit?b:a);add("Combat log","Biggest single hit *",r[0],bm,`${kfmt(r[0])} <span class="dim">${esc(bs?.name||'')}</span>`);
+    r=best(e=>e.m.combatSummary?.kills);add("Combat log","Most killing blows *",r[0],r[1]);
+    r=best(e=>{const d=e.m.combatSummary?.dealt||[];const h=sum(d,s=>s.hits);return h?sum(d,s=>s.crits)/h:null});add("Combat log","Highest crit rate *",r[0],r[1],pct(r[0]));
+  }
+  v.innerHTML=`<section class="panel"><header><h2>Records</h2><span class="dim">* only available for matches with timeline / combat log data. Click a row to open the match.</span></header><div class="body" id="tbl"></div></section>`;
+  table($('#tbl'),rec,[{k:'cat',label:'Category',l:1},{k:'label',label:'Record',l:1},{k:'disp',label:'Value',fmt:v=>v},{k:'m',label:'Match',l:1,fmt:m=>`${esc(m.mapName)} · ${dt(m._t)} · ${placeTxt(m._place)}`}],{sort:'cat',dir:1,onClick:r=>openMatch(r.m)});
+}
+
+/* ─────────── Jobs ─────────── */
+function sourceEntries(ms,src){
+  const out=[];
+  for(const m of ms)for(const p of m.players){
+    const you=p.isYou,mate=!you&&m._team&&p.team===m._team,opp=!you&&m._team&&p.team!==m._team;
+    if(src==="all"||(src==="you"&&you)||(src==="team"&&mate)||(src==="opp"&&opp)||(src==="others"&&!you))out.push({p,m});
+  }return out;
+}
+function statCols(){
+  return [
+   {k:'n',label:'Matches',def:1},{k:'fr',label:'1st Rate',fmt:v=>pct(v),heat:'hi'},{k:'avgPlace',label:'Avg Place',fmt:v=>fmt(v,2),heat:'lo'},
+   ...STATS.map(([k,l])=>({k:k+'_pm',label:l.replace('Damage','Dmg')+'/M',fmt:kfmt,heat:k==='deaths'||k==='damageTaken'?'lo':'hi',title:l+' per match'})),
+   ...STATS.map(([k,l])=>({k:k+'_c',label:l.replace('Damage','Dmg')+' Contrib',fmt:v=>pct(v),title:'Median share of team total'})),
+   {k:'kda',label:'KDA',fmt:v=>fmt(v,2),heat:'hi'},{k:'kp',label:'Kill Part.',fmt:v=>pct(v),heat:'hi'},
+   {k:'dmgPerKA',label:'Dmg/KA',fmt:kfmt},{k:'dmgPerLife',label:'Dmg/Life',fmt:kfmt,heat:'hi'},{k:'takenPerLife',label:'Taken/Life',fmt:kfmt},{k:'hpPerLife',label:'HP/Life',fmt:kfmt},
+   {k:'avgBH',label:'Avg Max BH',fmt:v=>fmt(v,1)}];
+}
+function srcPicker(id){return `<select id="${id}"><option value="you">Your stats</option><option value="team">Teammates</option><option value="opp">Opponents</option><option value="others">Everyone but you</option><option value="all">Everyone</option></select>`}
+function viewJobs(v,ms){
+  v.innerHTML=`<section class="panel"><header><h2>Jobs</h2><div class="flex"><span class="dim">Including stats for</span>${srcPicker('src')}</div></header><div class="body" id="tbl"></div></section>`;
+  $('#src').value=F.src;$('#src').onchange=e=>{F.src=e.target.value;refresh()};
+  const by={};sourceEntries(ms,F.src).forEach(e=>(by[e.p.job||"?"]??=[]).push(e));
+  const rows=Object.entries(by).map(([job,es])=>{const a=aggregate(es);return{job,role:es[0].p.role||"",...a,fr:a.firstRate}});
+  table($('#tbl'),rows,[{k:'job',label:'Job',l:1},{k:'role',label:'Role',l:1},...statCols()]);
+}
+
+/* ─────────── Players ─────────── */
+function viewPlayers(v,ms){
+  v.innerHTML=`<section class="panel"><header><h2>Players</h2><div class="flex"><span class="dim">Including stats as</span>${srcPicker('src')}
+   <span class="dim">Min. matches</span><input type="number" id="minm" min="1" max="500" value="${F.minMatches}" style="width:60px">
+   <input id="psearch" placeholder="Quick search (comma separated)" value="${esc(F.search)}" size="26"></div></header><div class="body" id="tbl"></div></section>`;
+  $('#src').value=F.src==='you'?'others':F.src;
+  $('#src').onchange=e=>{F.src=e.target.value;refresh()};$('#minm').onchange=e=>{F.minMatches=+e.target.value||1;refresh()};
+  $('#psearch').oninput=e=>{F.search=e.target.value;clearTimeout(window._ps);window._ps=setTimeout(refresh,250)};
+  const src=F.src==='you'?'others':F.src;
+  const by={};
+  sourceEntries(ms,src).forEach(e=>{if(e.p.isYou)return;const k=e.p.name+" "+e.p.world;(by[k]??=[]).push(e)});
+  const q=F.search.toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
+  const rows=Object.entries(by).filter(([k,es])=>es.length>=F.minMatches&&(!q.length||q.some(s=>k.toLowerCase().includes(s)))).map(([k,es])=>{
+    const a=aggregate(es),jobs={};es.forEach(e=>jobs[e.p.job]=(jobs[e.p.job]||0)+1);
+    const asMate=es.filter(e=>e.p.team===e.m._team),asOpp=es.filter(e=>e.m._team&&e.p.team!==e.m._team);
+    return{name:es[0].p.name,world:es[0].p.world,job:Object.entries(jobs).sort((a,b)=>b[1]-a[1])[0][0],...a,fr:a.firstRate,
+      mates:asMate.length,mateFirst:safeDiv(asMate.filter(e=>e.m._place===0).length,asMate.length),opps:asOpp.length,oppYouFirst:safeDiv(asOpp.filter(e=>e.m._place===0).length,asOpp.length)};
+  });
+  $('#tbl').insertAdjacentHTML('beforebegin','');
+  table($('#tbl'),rows,[{k:'name',label:'Name',l:1},{k:'world',label:'Home World',l:1},{k:'job',label:'Fav. Job',l:1},
+    {k:'mates',label:'As Teammate'},{k:'mateFirst',label:'1st Together',fmt:v=>pct(v),heat:'hi'},{k:'opps',label:'As Opponent'},{k:'oppYouFirst',label:'Your 1st vs',fmt:v=>pct(v),heat:'hi'},...statCols()]);
+  $('#tbl').insertAdjacentHTML('afterbegin',`<div class="dim" style="margin-bottom:6px">Total players: ${rows.length}</div>`);
+}
+
+/* ─────────── Meta ─────────── */
+function viewMeta(v,ms){
+  const MAX=24,res=[];
+  STATS.forEach(([k,l])=>{
+    const buckets=new Array(MAX).fill(0);let teams=0;
+    for(const m of ms)for(const tn of Object.keys(m.teams)){
+      const vals=m.players.filter(p=>p.team===tn).map(p=>p[k]||0).sort((a,b)=>b-a);const tot=sum(vals);if(!tot)continue;teams++;
+      vals.slice(0,MAX).forEach((x,i)=>buckets[i]+=x/tot);
+    }
+    const total=sum(buckets);if(!teams||!total)return;
+    const top1=buckets[0]/total,top4=sum(buckets.slice(0,4))/total;
+    const s=[...buckets].sort((a,b)=>b-a);let cs=0,ct=0;s.forEach(x=>{cs+=x;ct+=cs});const n=s.length,mean=total/n;
+    const gini=mean?(2*ct)/(n*cs)-(n+1)/n:0;
+    res.push({stat:l,top1,f1:top1/(1/MAX),top4,f4:top4/(4/MAX),gini:Math.abs(gini),teams,dist:buckets.map(x=>x/total)});
+  });
+  v.innerHTML=`<section class="panel"><header><h2>Meta — how evenly teams share the work</h2><span class="dim">based on ${ms.length} matches; factor 1.0× = perfectly even across 24 players</span></header><div class="body" id="tbl"></div><div class="body" id="dist"></div></section>`;
+  table($('#tbl'),res,[{k:'stat',label:'Stat',l:1},{k:'top1',label:'Top 1 Team Contrib.',fmt:v=>pct(v)},{k:'f1',label:'Factor',fmt:v=>fmt(v,2)+'×'},
+    {k:'top4',label:'Top 4 Team Contrib.',fmt:v=>pct(v)},{k:'f4',label:'Factor',fmt:v=>fmt(v,2)+'×'},{k:'gini',label:'Gini coeff.',fmt:v=>fmt(v,3),heat:'lo'}],{sort:'stat',dir:1,noscroll:1});
+  $('#dist').innerHTML=`<div class="dim" style="margin-bottom:6px">Average share of the team total by rank (1 = top player on the team)</div>`+
+    res.map(r=>`<div class="flex" style="margin:3px 0"><span style="width:130px">${r.stat}</span>${r.dist.map((x,i)=>`<span title="Rank ${i+1}: ${pct(x)}" style="display:inline-block;width:14px;height:${Math.max(2,x*160)}px;background:var(--gold);opacity:${.35+x*4};align-self:flex-end"></span>`).join('')}</div>`).join('');
+}
+
+/* ─────────── Combat (across matches) ─────────── */
+function viewCombat(v,ms){
+  const withLog=ms.filter(m=>m.combatSummary);
+  if(!withLog.length){v.innerHTML='<section class="panel"><div class="empty">No matches in this selection have a personal combat log.<br>Logs are recorded for Frontline matches played with FLStats Plus.</div></section>';return}
+  const merge=(list,key)=>{const o={};for(const r of list){const k=key(r);const x=(o[k]??={...r,hits:0,damage:0,heal:0,crits:0,directHits:0,killingBlows:0,maxHit:0,matches:0});
+    x.hits+=r.hits||0;x.damage+=r.damage||0;x.heal+=r.heal||0;x.crits+=r.crits||0;x.directHits+=r.directHits||0;x.killingBlows+=r.killingBlows||0;x.maxHit=Math.max(x.maxHit,r.maxHit||0);x.matches++}return Object.values(o)};
+  const dealt=merge(withLog.flatMap(m=>m.combatSummary.dealt||[]),r=>r.name+"|"+r.kind);
+  const taken=merge(withLog.flatMap(m=>m.combatSummary.taken||[]),r=>r.name+"|"+r.kind);
+  const targets=merge(withLog.flatMap(m=>m.combatSummary.targets||[]),r=>r.name);
+  const sources=merge(withLog.flatMap(m=>m.combatSummary.sources||[]),r=>r.name);
+  const byJob=(rows)=>{const o={};rows.forEach(r=>{const j=r.job||"?";const x=(o[j]??={job:j,hits:0,damage:0,killingBlows:0,players:0});x.hits+=r.hits;x.damage+=r.damage;x.killingBlows+=r.killingBlows;x.players++});return Object.values(o)};
+  const totD=sum(dealt,r=>r.damage)||1,totT=sum(taken,r=>r.damage)||1;
+  const minutes=sum(withLog,m=>m._min);
+  v.innerHTML=`
+   <section class="panel"><header><h2>Your Combat — ${withLog.length} logged match(es)</h2></header><div class="body tiles">
+    ${[["Damage dealt (logged)",kfmt(totD)],["Per minute",fmt(totD/minutes)],["Damage taken (logged)",kfmt(totT)],["Healing done",kfmt(sum(dealt,r=>r.heal)+sum(withLog.flatMap(m=>m.combatSummary.selfSkills||[]),r=>r.heal))],
+       ["Killing blows",fmt(sum(withLog,m=>m.combatSummary.kills))],["Deaths",fmt(sum(withLog,m=>m.combatSummary.deaths))],["Crit rate",pct(sum(dealt,r=>r.crits)/Math.max(1,sum(dealt,r=>r.hits)))],["Direct hit rate",pct(sum(dealt,r=>r.directHits)/Math.max(1,sum(dealt,r=>r.hits)))]]
+      .map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div></section>
+   <div class="grid2">
+    <section class="panel"><header><h2>Your Skills</h2></header><div class="body" id="cDealt"></div></section>
+    <section class="panel"><header><h2>Skills Used On You</h2></header><div class="body" id="cTaken"></div></section>
+   </div>
+   <div class="grid2">
+    <section class="panel"><header><h2>Damage & Kills by Enemy Job</h2></header><div class="body" id="cJobOut"></div></section>
+    <section class="panel"><header><h2>Damage Taken & Deaths by Enemy Job</h2></header><div class="body" id="cJobIn"></div></section>
+   </div>
+   <div class="grid2">
+    <section class="panel"><header><h2>Players You Hit Most</h2></header><div class="body" id="cTargets"></div></section>
+    <section class="panel"><header><h2>Players Who Hit You Most</h2></header><div class="body" id="cSources"></div></section>
+   </div>`;
+  const skillCols=(tot,color)=>[{k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind!=='action'?` <span class="pill">${r.kind}</span>`:'')},{k:'hits',label:'Hits'},
+    {k:'damage',label:'Damage',def:1,fmt:v=>kfmt(v)+bar(v,tot*0.5,color)},{k:'avg',label:'Avg',fmt:kfmt},{k:'cr',label:'Crit',fmt:v=>pct(v)},{k:'dhr',label:'DH',fmt:v=>pct(v)},{k:'maxHit',label:'Max',fmt:kfmt},{k:'killingBlows',label:'KB'},{k:'heal',label:'Heal',fmt:kfmt}];
+  const deco=rows=>rows.map(r=>({...r,avg:safeDiv(r.damage,r.hits),cr:safeDiv(r.crits,r.hits),dhr:safeDiv(r.directHits,r.hits)}));
+  table($('#cDealt'),deco(dealt),skillCols(totD,'var(--dmg)'));
+  table($('#cTaken'),deco(taken),skillCols(totT,'var(--bad)'));
+  const jc=[{k:'job',label:'Enemy Job',l:1},{k:'players',label:'Player-matches'},{k:'hits',label:'Hits'},{k:'damage',label:'Damage',def:1,fmt:kfmt},{k:'killingBlows',label:'Killing Blows'}];
+  table($('#cJobOut'),byJob(targets),jc);table($('#cJobIn'),byJob(sources),jc);
+  const oc=[{k:'name',label:'Player',l:1,fmt:(v,r)=>`${r.team?`<span class="t-${r.team}">●</span> `:''}${esc(v)}`},{k:'job',label:'Job',l:1},{k:'matches',label:'Matches'},{k:'hits',label:'Hits'},{k:'damage',label:'Damage',def:1,fmt:kfmt},{k:'killingBlows',label:'KB'}];
+  table($('#cTargets'),targets,oc);table($('#cSources'),sources,oc);
+}
+
+/* ─────────── Match detail ─────────── */
+const MD={totals:true,pct:false,teamFirst:true,cView:'out',cSkill:null,cDir:'all',cText:''};
+function viewMatch(v){
+  const m=SEL;if(!m){v.innerHTML='<div class="empty">Select a match.</div>';return}
+  const you=m._you,order=[...TEAMS].sort((a,b)=>(m.teams[a]?.placement??9)-(m.teams[b]?.placement??9));
+  const idx=ALL.indexOf(m);
+  v.innerHTML=`
+  <section class="panel hero">
+    <div><h1>${esc(m.mapName)} <span class="dim" style="font-size:15px">${esc(m.mapType)}</span></h1>
+      <div class="dim">${dt(m._t)} · ${mmss(m.durationSec)} · ${esc(m.dataCenter||'')} ${m.gameVersion?'· game '+esc(m.gameVersion):''}</div>
+      ${you?`<div style="margin-top:3px">${esc(you.name)} <span class="dim">${esc(you.world)}</span> · <b>${esc(you.job||'')}</b> · ${teamTxt(you.team)} · Alliance ${ALLI[you.alliance]||'?'}
+        ${m.wolfMarks!=null?` · <span class="dim">Wolf Marks</span> ${fmt(m.wolfMarks)}`:''}${m.seriesXP!=null?` · <span class="dim">Series XP</span> ${fmt(m.seriesXP)}`:''}</div>`:''}
+      <div class="flex" style="margin-top:8px">
+        ${ALL.length>1?`<button class="btn" id="prevM" ${idx<=0?'disabled':''}>◀ Previous</button><button class="btn" id="nextM" ${idx>=ALL.length-1?'disabled':''}>Next ▶</button>`:''}
+        <button class="btn" id="mJson">Match JSON</button>${m.combat?'<button class="btn" id="mCsv">Combat log CSV</button>':''}
+      </div></div>
+    <div class="bigplace">${placeTxt(m._place)}<small>PLACEMENT</small></div>
+  </section>
+  <section class="panel"><header><h2>Team Points</h2></header><div class="body" id="teamPts"></div></section>
+  ${m.teamPoints||m.battleHigh?`<div class="grid2">
+    <section class="panel"><header><h2>Team Points Over Time</h2></header><div class="body" id="gPts"></div></section>
+    <section class="panel"><header><h2>Your Battle High</h2></header><div class="body" id="gBH"></div></section></div>`:''}
+  <section class="panel"><header><h2>Scoreboard — ${m.players.length} players</h2>
+    <div class="flex"><button class="btn ${MD.totals?'on':''}" id="tTot">Team totals</button><button class="btn ${MD.pct?'on':''}" id="tPct">% of team</button>
+    <select id="tGroup"><option value="team">Group by team</option><option value="alli">Group by alliance</option><option value="none">No grouping</option></select></div></header>
+    <div class="body" id="sb"></div></section>
+  <div id="combatHost"></div>`;
+  if(idx>0)$('#prevM')&&($('#prevM').onclick=()=>openMatch(ALL[idx-1]));
+  if(idx<ALL.length-1)$('#nextM')&&($('#nextM').onclick=()=>openMatch(ALL[idx+1]));
+  $('#mJson').onclick=()=>{dl(`FL_${m.mapName.replace(/\W/g,'')}_${m.start.slice(0,16).replace(/\D/g,'')}.json`,JSON.stringify(stripPriv(m),null,1),'application/json')};
+  if(m.combat)$('#mCsv').onclick=()=>dl(`FL_combat_${m.start.slice(0,16).replace(/\D/g,'')}.csv`,combatCsv(m),'text/csv');
+
+  // team points table
+  const tp=order.map(t=>({t,...m.teams[t],diff:(m.teams[t]?.killPoints||0)-(m.teams[t]?.deathPointLosses||0)}));
+  const occLabel=m.mapType==="Shatter"?"Ice":m.mapType==="Danshig Naadam"?"Ovoos":m.mapType==="Triumph"?"Triumphs":"Occupations";
+  table($('#teamPts'),tp,[{k:'t',label:'Team',l:1,fmt:teamTxt},{k:'placement',label:'Place',fmt:placeTxt},{k:'occupationPoints',label:`From ${occLabel}`,fmt:v=>fmt(v)},
+    {k:'targetablePoints',label:'From Ice/Tomeliths',fmt:v=>fmt(v)},{k:'dronePoints',label:'From Drones',fmt:v=>fmt(v)},{k:'killPoints',label:'From Kills',fmt:v=>fmt(v)},
+    {k:'deathPointLosses',label:'Lost to Deaths',fmt:v=>v?'−'+fmt(v):'0'},{k:'diff',label:'K/D Point Diff.',fmt:v=>`<span class="${v>=0?'good':'bad'}">${v>0?'+':''}${fmt(v)}</span>`},
+    {k:'totalPoints',label:'Total',fmt:v=>`<b>${fmt(v)}</b>`,def:1}],{csv:false,noscroll:1});
+
+  // graphs
+  const deaths=(m.combat||[]).filter(c=>c.kind==='death'&&c.dir==='in');
+  if(m.teamPoints)$('#gPts').innerHTML=lineChart(TEAMS.filter(t=>m.teamPoints[t]).map(t=>({name:t,color:`var(--${t})`,pts:m.teamPoints[t],step:true})),
+    {xmax:m.durationSec,markers:deaths.map(d=>({x:d.t,tip:`You died at ${mmss(d.t)} — ${esc(d.other)} (${esc(d.name)})`}))})+
+    `<div class="legend">${TEAMS.map(t=>`<span><i class="dot" style="background:var(--${t})"></i>${t}</span>`).join('')}<span>☠ your deaths</span></div>`;
+  else if($('#gPts'))$('#gPts').innerHTML='<div class="empty">No timeline recorded.</div>';
+  if(m.battleHigh&&m.battleHigh.length){const ymax=Math.max(110,...m.battleHigh.map(p=>p[1]));
+    $('#gBH').innerHTML=lineChart([{name:'BH',color:'var(--gold2)',pts:m.battleHigh,step:true}],{xmax:m.durationSec,ymax,yfmt:v=>Math.round(v),
+      bands:[20,40,60,80,100].map((b,i)=>({from:b,to:i<4?b+20:ymax,color:`rgba(201,169,92,${.04+i*.025})`,label:'BH '+["I","II","III","IV","V"][i]})),
+      markers:deaths.map(d=>({x:d.t,tip:`Death at ${mmss(d.t)}`}))});
+  } else if($('#gBH'))$('#gBH').innerHTML='<div class="empty">No Battle High data.</div>';
+
+  // scoreboard
+  $('#tGroup').value=MD.group||'team';
+  $('#tTot').onclick=()=>{MD.totals=!MD.totals;viewMatch(v);bindTips(v)};$('#tPct').onclick=()=>{MD.pct=!MD.pct;viewMatch(v);bindTips(v)};
+  $('#tGroup').onchange=e=>{MD.group=e.target.value;viewMatch(v);bindTips(v)};
+  drawScoreboard(m,order);
+  if(m.combat||m.combatSummary)drawCombat(m);
+  else $('#combatHost').innerHTML='<section class="panel"><div class="empty">No personal combat log for this match.</div></section>';
+}
+function stripPriv(m){const o={};for(const k in m)if(!k.startsWith('_'))o[k]=m[k];return o}
+function drawScoreboard(m,order){
+  const grp=MD.group||'team',tt=m._teamTot;
+  const isWT=m.mapType==="Triumph";
+  const row=p=>{const t=tt[p.team]||{},r={...p,_p:p,name:p.name,ka:p.kills+p.assists,kda:(p.kills+p.assists)/Math.max(1,p.deaths),
+    dmgKA:safeDiv(p.damageToPCs,p.kills+p.assists),dmgLife:p.damageToPCs/(p.deaths+1),occ:isWT?p.claimTimeSec:p.occupations};
+    if(MD.pct)STATS.forEach(([k])=>r[k]=safeDiv(p[k],t[k]));return r};
+  let rows=[];
+  const teamRow=(label,ps,team)=>{const r={name:label,_team:true,team,kills:0,deaths:0,assists:0,damageToPCs:0,damageToOther:0,damageTaken:0,hpRestored:0,special:0,occ:0};
+    ps.forEach(p=>{STATS.forEach(([k])=>r[k]+=p[k]||0);r.special+=p.special||0;r.occ+=isWT?p.claimTimeSec:p.occupations});r.ka=r.kills+r.assists;r.kda=r.ka/Math.max(1,r.deaths);r.dmgKA=safeDiv(r.damageToPCs,r.ka);r.dmgLife=r.damageToPCs/(r.deaths+ps.length);
+    if(MD.pct)STATS.forEach(([k])=>r[k]=1);return r};
+  if(grp==='none')rows=m.players.map(row);
+  else for(const t of order){const ps=m.players.filter(p=>p.team===t);
+    if(grp==='team'){if(MD.totals)rows.push(teamRow(t,ps,t));rows.push(...ps.map(row))}
+    else for(let a=0;a<3;a++){const pa=ps.filter(p=>p.alliance===a);if(!pa.length)continue;if(MD.totals)rows.push(teamRow(`${t} — Alliance ${ALLI[a]}`,pa,t));rows.push(...pa.map(row))}}
+  const nf=k=>(v,r)=>MD.pct&&!r._team?pct(v):(k==='kills'||k==='deaths'||k==='assists'?fmt(v):kfmt(v));
+  const cols=[{k:'name',label:'Name',l:1,fmt:(v,r)=>r._team?`<span class="t-${r.team}">■</span> ${esc(v)}`:`<span class="t-${r.team}">●</span> ${esc(v)} <span class="dim">${esc(r.world)}</span>`},
+    {k:'job',label:'Job',l:1,fmt:v=>esc(v||'')},{k:'alliance',label:'All.',fmt:(v,r)=>r._team?'':ALLI[v]||''},
+    ...STATS.map(([k,l])=>({k,label:l.replace('Damage','Dmg'),fmt:nf(k)})),
+    {k:'special',label:'Special',fmt:kfmt,title:'Unknown healing-related value from the scoreboard'},
+    {k:'occ',label:isWT?'Claim Time':'Occupations',fmt:v=>isWT?mmss(v):fmt(v)},
+    {k:'maxBattleHigh',label:'Max BH',fmt:v=>v==null?'':v},{k:'kda',label:'KDA',fmt:v=>fmt(v,2)},{k:'dmgKA',label:'Dmg/KA',fmt:kfmt},{k:'dmgLife',label:'Dmg/Life',fmt:kfmt}];
+  // grouping requires fixed order; sorting only within "no grouping"
+  if(grp==='none')table($('#sb'),rows,cols,{sort:'damageToPCs',rowClass:r=>r.isYou?'you':''});
+  else{const host=$('#sb');table(host,rows,cols,{sort:'__none',dir:1,rowClass:r=>(r.isYou?'you':'')+(r._team?' teamrow':'')});
+    host.querySelector('.flex').insertAdjacentHTML('afterbegin','<span class="dim" style="margin-right:auto">Switch to "No grouping" to sort by any column.</span>');}
+}
+function combatCsv(m){
+  const h=["t_s","direction","kind","skill","other","other_job","other_team","damage","heal","mp_drain","crit","direct_hit","blocked","parried","missed","invulnerable","killing_blow","pet"];
+  return [csvRow(h),...m.combat.map(c=>csvRow([c.t,c.dir,c.kind,c.name,c.other,c.otherJob,c.otherTeam,c.dmg||0,c.heal||0,c.mpDrain||0,!!c.crit,!!c.dh,!!c.blocked,!!c.parried,!!c.miss,!!c.invuln,!!c.kb,!!c.pet]))].join("\n");
+}
+function drawCombat(m){
+  const C=m.combat,S=m.combatSummary;const host=$('#combatHost');
+  const out=C?C.filter(c=>c.dir==='out'&&c.kind!=='death'):null,inc=C?C.filter(c=>c.dir==='in'&&c.kind!=='death'):null;
+  const dealt=C?sum(out,c=>c.dmg||0):sum(S.dealt,r=>r.damage),taken=C?sum(inc,c=>c.dmg||0):sum(S.taken,r=>r.damage);
+  const healOut=C?sum(C.filter(c=>c.dir!=='in'),c=>c.heal||0):sum(S.dealt,r=>r.heal)+sum(S.selfSkills||[],r=>r.heal);
+  const hitsOut=C?out.filter(c=>c.dmg).length:sum(S.dealt,r=>r.hits);
+  const crits=C?out.filter(c=>c.crit).length:sum(S.dealt,r=>r.crits);
+  const sb=m._you;
+  host.innerHTML=`
+  <section class="panel"><header><h2>Your Combat Log</h2><span class="dim">${C?`${C.length} entries`:'summary only (raw log not embedded in this report)'}${sb?` · logged damage = ${pct(dealt/Math.max(1,sb.damageDealt),0)} of your scoreboard damage dealt`:''}</span></header>
+   <div class="body tiles">${[["Damage dealt",kfmt(dealt)],["DPS",fmt(dealt/Math.max(1,m.durationSec))],["Damage taken",kfmt(taken)],["Healing done",kfmt(healOut)],
+     ["Hits landed",fmt(hitsOut)],["Crit rate",pct(crits/Math.max(1,hitsOut))],["Killing blows",fmt(C?C.filter(c=>c.kind==='death'&&c.dir==='out').length:S.kills)],["Deaths",fmt(C?C.filter(c=>c.kind==='death'&&c.dir==='in').length:S.deaths)]]
+     .map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div></section>
+  ${C?`<section class="panel"><header><h2>Combat Timeline</h2><span class="dim">your damage per 15 s · <span class="bad">▼</span> damage taken · ☠ deaths (click for recap) · ⚔ kills</span></header><div class="body"><div id="ctl"></div><div id="recap"></div></div></section>`:''}
+  <div class="grid2">
+   <section class="panel"><header><h2 id="skillTitle">Skills</h2><div class="flex"><button class="btn ${MD.cView==='out'?'on':''}" data-cv="out">Dealt</button><button class="btn ${MD.cView==='in'?'on':''}" data-cv="in">Taken</button></div></header><div class="body" id="cSkills"></div></section>
+   <section class="panel"><header><h2 id="tgtTitle">Targets</h2></header><div class="body" id="cTargets"></div></section>
+  </div>
+  ${C?`<section class="panel"><header><h2>Full Combat Log</h2><div class="flex">
+     <select id="cDir"><option value="all">All</option><option value="out">Dealt</option><option value="in">Taken</option><option value="self">Self</option><option value="death">Kills & deaths</option></select>
+     <input id="cText" placeholder="Filter skill / player…" value="${esc(MD.cText)}"></div></header><div class="body" id="cLog"></div></section>`:''}`;
+  host.querySelectorAll('[data-cv]').forEach(b=>b.onclick=()=>{MD.cView=b.dataset.cv;MD.cSkill=null;drawCombat(m);bindTips(host)});
+  // timeline
+  if(C){
+    const B=15,n=Math.max(1,Math.ceil(m.durationSec/B)),bo=new Array(n).fill(0),bi=new Array(n).fill(0);
+    out.forEach(c=>bo[Math.min(n-1,Math.max(0,Math.floor(c.t/B)))]+=c.dmg||0);inc.forEach(c=>bi[Math.min(n-1,Math.max(0,Math.floor(c.t/B)))]+=c.dmg||0);
+    const mx=Math.max(1,...bo,...bi),W=900,H=150,mid=95,bw=W/n;
+    let g='';
+    bo.forEach((v,i)=>g+=`<rect x="${i*bw+.5}" width="${Math.max(1,bw-1)}" y="${mid-v/mx*85}" height="${v/mx*85}" fill="var(--dmg)" opacity=".8" data-tip="${mmss(i*B)}–${mmss((i+1)*B)}<br>dealt ${fmt(v)}"/>`);
+    bi.forEach((v,i)=>g+=`<rect x="${i*bw+.5}" width="${Math.max(1,bw-1)}" y="${mid}" height="${v/mx*45}" fill="var(--bad)" opacity=".6" data-tip="${mmss(i*B)}–${mmss((i+1)*B)}<br>taken ${fmt(v)}"/>`);
+    C.filter(c=>c.kind==='death').forEach((c,i)=>g+=`<text x="${c.t/m.durationSec*W}" y="${c.dir==='in'?H-2:10}" text-anchor="middle" style="font-size:13px;cursor:pointer;fill:${c.dir==='in'?'var(--bad)':'var(--good)'}" data-death="${C.indexOf(c)}" data-tip="${c.dir==='in'?'Killed by':'You killed'} ${esc(c.other)} — ${esc(c.name)} at ${mmss(c.t)}">${c.dir==='in'?'☠':'⚔'}</text>`);
+    $('#ctl').innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}"><line x1="0" x2="${W}" y1="${mid}" y2="${mid}" stroke="var(--line)"/>${g}</svg>
+      <div class="flex dim" style="justify-content:space-between;font-size:11px"><span>0:00</span><span>${mmss(m.durationSec/2)}</span><span>${mmss(m.durationSec)}</span></div>`;
+    $('#ctl').querySelectorAll('[data-death]').forEach(n=>n.onclick=()=>{const d=C[+n.dataset.death];
+      const win=C.filter(c=>c.t<=d.t&&c.t>=d.t-10&&c.kind!=='death'&&(d.dir==='in'?c.dir==='in':c.other===d.other));
+      $('#recap').innerHTML=`<div class="deathbox"><b>${d.dir==='in'?'☠ Death':'⚔ Kill'} at ${mmss(d.t)}</b> — ${d.dir==='in'?'killed by':'you killed'} ${esc(d.other)} ${d.otherJob?`<span class="pill">${esc(d.otherJob)}</span>`:''}<br><span class="dim">last 10 seconds:</span><br>`+
+        (win.length?win.slice(-12).map(c=>`${mmss(c.t)} &nbsp;${c.dir==='in'?esc(c.other):'You'} → ${c.dir==='in'?'you':esc(c.other)} · ${esc(c.name)} ${c.dmg?`<span class="dmg">${fmt(c.dmg)}</span>`:''}${c.heal?`<span class="heal">+${fmt(c.heal)}</span>`:''}${c.crit?' <span style="color:var(--crit)">!</span>':''}${c.dh?' <span style="color:var(--dh)">DH</span>':''}${c.kb?' <b>☠ killing blow</b>':''}${c.otherHp!=null&&c.otherMaxHp?` <span class="dim">(${pct(c.otherHp/c.otherMaxHp,0)} HP before)</span>`:''}`).join('<br>'):'<span class="dim">no hits recorded in range</span>')+`</div>`});
+  }
+  // skills/targets
+  const dir=MD.cView;
+  let skills,others;
+  if(C){const src=dir==='out'?out:inc;
+    const g={};src.forEach(c=>{const k=c.name+"|"+c.kind;const x=(g[k]??={name:c.name,kind:c.kind,hits:0,damage:0,heal:0,crits:0,directHits:0,maxHit:0,killingBlows:0});
+      x.hits++;x.damage+=c.dmg||0;x.heal+=c.heal||0;x.crits+=c.crit?1:0;x.directHits+=c.dh?1:0;x.maxHit=Math.max(x.maxHit,c.dmg||0);x.killingBlows+=c.kb?1:0});
+    skills=Object.values(g);
+    const sel=MD.cSkill?src.filter(c=>c.name===MD.cSkill):src;const o={};
+    sel.forEach(c=>{const x=(o[c.other]??={name:c.other,job:c.otherJob,team:c.otherTeam,hits:0,damage:0,heal:0,maxHit:0,killingBlows:0});x.hits++;x.damage+=c.dmg||0;x.heal+=c.heal||0;x.maxHit=Math.max(x.maxHit,c.dmg||0);x.killingBlows+=c.kb?1:0});
+    others=Object.values(o);
+  }else{skills=(dir==='out'?S.dealt:S.taken).map(r=>({...r}));others=(dir==='out'?S.targets:S.sources).map(r=>({...r}))}
+  const tot=sum(skills,r=>r.damage)||1;
+  skills.forEach(r=>{r.avg=safeDiv(r.damage,r.hits);r.cr=safeDiv(r.crits,r.hits);r.dhr=safeDiv(r.directHits,r.hits);r.share=r.damage/tot});
+  $('#skillTitle').textContent=dir==='out'?'Your Skills':'Skills Used On You';
+  $('#tgtTitle').textContent=dir==='out'?`Targets — ${MD.cSkill||'all skills'}`:`Attackers — ${MD.cSkill||'all skills'}`;
+  table($('#cSkills'),skills,[{k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind!=='action'?` <span class="pill">${r.kind}</span>`:'')},{k:'hits',label:'Hits'},
+    {k:'damage',label:'Damage',def:1,fmt:v=>fmt(v)},{k:'avg',label:'Avg',fmt:kfmt},{k:'cr',label:'Crit',fmt:v=>pct(v)},{k:'dhr',label:'DH',fmt:v=>pct(v)},{k:'maxHit',label:'Max',fmt:kfmt},
+    {k:'killingBlows',label:'KB'},{k:'heal',label:'Heal',fmt:kfmt},{k:'share',label:'Share',fmt:v=>pct(v)+bar(v,Math.max(...skills.map(s=>s.share)),dir==='out'?'var(--dmg)':'var(--bad)')}],
+    {rowClass:r=>MD.cSkill===r.name?'sel':'',onClick:C?(r=>{MD.cSkill=MD.cSkill===r.name?null:r.name;drawCombat(m);bindTips(host)}):null});
+  const mo=Math.max(1,...others.map(r=>r.damage));
+  table($('#cTargets'),others,[{k:'name',label:dir==='out'?'Target':'Attacker',l:1,fmt:(v,r)=>`${r.team?`<span class="t-${r.team}">●</span> `:''}${esc(v)} ${r.job?`<span class="pill">${esc(r.job)}</span>`:''}`},
+    {k:'hits',label:'Hits'},{k:'damage',label:'Damage',def:1,fmt:v=>fmt(v)+bar(v,mo,dir==='out'?'var(--dmg)':'var(--bad)')},{k:'maxHit',label:'Max',fmt:kfmt},{k:'killingBlows',label:dir==='out'?'Kills':'Killed you'},{k:'heal',label:'Heal',fmt:kfmt}]);
+  // log
+  if(C){$('#cDir').value=MD.cDir;
+    const drawLog=()=>{const q=MD.cText.toLowerCase();
+      const rows=C.filter(c=>(MD.cDir==='all'||(MD.cDir==='death'?c.kind==='death':c.dir===MD.cDir&&c.kind!=='death'))&&(!q||(c.name+" "+c.other).toLowerCase().includes(q)))
+        .map((c,i)=>({...c,i,amt:(c.dmg||0)||(c.heal||0)}));
+      table($('#cLog'),rows,[{k:'t',label:'Time',l:1,fmt:mmss},{k:'dir',label:'',l:1,fmt:(v,r)=>r.kind==='death'?(v==='in'?'<span class="bad">☠</span>':'<span class="good">⚔</span>'):v==='out'?'<span class="dmg">→</span>':v==='in'?'<span class="bad">←</span>':'<span class="heal">↺</span>'},
+        {k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind!=='action'&&r.kind!=='death'?` <span class="pill">${r.kind}</span>`:'')+(r.pet?' <span class="pill">pet</span>':'')},
+        {k:'other',label:'Player',l:1,fmt:(v,r)=>`${r.otherTeam?`<span class="t-${r.otherTeam}">●</span> `:''}${esc(v)} ${r.otherJob?`<span class="pill">${esc(r.otherJob)}</span>`:''}`},
+        {k:'amt',label:'Amount',fmt:(v,r)=>r.dmg?`<span class="${r.dir==='in'?'bad':'dmg'}">${fmt(r.dmg)}</span>`:r.heal?`<span class="heal">+${fmt(r.heal)}</span>`:r.miss?'<span class="dim">miss</span>':r.invuln?'<span class="dim">invuln</span>':''},
+        {k:'flags',label:'Flags',l:1,fmt:(v,r)=>[r.crit&&'<span style="color:var(--crit)">CRIT</span>',r.dh&&'<span style="color:var(--dh)">DH</span>',r.blocked&&'block',r.parried&&'parry',r.kb&&'<b>☠ KB</b>',r.statusApplied&&`+${r.statusApplied} status`].filter(Boolean).join(' ')}],{sort:'t',dir:1});};
+    $('#cDir').onchange=e=>{MD.cDir=e.target.value;drawLog()};$('#cText').oninput=e=>{MD.cText=e.target.value;clearTimeout(window._ct);window._ct=setTimeout(drawLog,200)};drawLog();}
+}
+
+/* ═══════════════════════════ downloads & merge ═══════════════════════════ */
+$('#btnJson').onclick=()=>{const ms=VIEW==='match'&&SEL?[SEL]:filtered();dl(`flstats_${ms.length}matches.json`,JSON.stringify({...R,matches:ms.map(stripPriv)},null,1),'application/json')};
+$('#btnCsv').onclick=()=>{const ms=VIEW==='match'&&SEL?[SEL]:filtered();
+  const h=["match_id","start","map","mode","duration_s","team","team_placement","team_points","player","world","job","alliance","is_you","kills","deaths","assists","damage_dealt","damage_to_pcs","damage_to_other","damage_taken","hp_restored","special","occupations","claim_time_s","max_battle_high"];
+  const rows=[csvRow(h)];ms.forEach(m=>m.players.forEach(p=>{const t=m.teams[p.team]||{};rows.push(csvRow([m.id,m.start,m.mapName,m.mapType,m.durationSec,p.team,t.placement!=null?t.placement+1:'',t.totalPoints,p.name,p.world,p.job,ALLI[p.alliance],p.isYou,p.kills,p.deaths,p.assists,p.damageDealt,p.damageToPCs,p.damageToOther,p.damageTaken,p.hpRestored,p.special,p.occupations,p.claimTimeSec,p.maxBattleHigh??'']))}));
+  dl(`flstats_scoreboards_${ms.length}matches.csv`,rows.join("\n"),'text/csv')};
+$('#mergeFile').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;const text=await f.text();let rep=null;
+  try{if(f.name.endsWith('.json'))rep=JSON.parse(text);else{const doc=new DOMParser().parseFromString(text,'text/html');rep=JSON.parse(doc.getElementById('report-data').textContent)}}catch(err){alert('Could not read that file: '+err.message);return}
+  if(!rep?.matches){alert('That file is not an FLStats Plus export.');return}
+  const have=new Map(ALL.map(m=>[m._key,m]));let added=0,enriched=0;
+  for(const raw of rep.matches){const m=prep(raw),ex=have.get(m._key);
+    if(!ex){ALL.push(m);have.set(m._key,m);added++;continue}
+    // same match seen by another character/database: keep ours, fill in missing data
+    if(!ex.teamPoints&&m.teamPoints){ex.teamPoints=m.teamPoints;enriched++}
+    if(!ex.combat&&m.combat&&m.localPlayer===ex.localPlayer){ex.combat=m.combat;ex.combatSummary=m.combatSummary;enriched++}}
+  ALL.sort((a,b)=>a._t-b._t);buildFilters();refresh();e.target.value='';
+  alert(`Merged ${f.name}: ${added} new match(es), ${enriched} enriched. Duplicates (same map & start minute) were skipped.`);
+};
+
+/* ═══════════════════════════ boot ═══════════════════════════ */
+$('#subtitle').textContent=`${ALL.length} Frontline match${ALL.length===1?'':'es'}${ALL.length?` · ${dt(ALL[0]._t)} → ${dt(ALL[ALL.length-1]._t)}`:''}`;
+$('#footer').textContent=`${R.plugin||'FLStats Plus'} · generated ${dt(R.generated)} · self-contained report, works offline · based on PvP Tracker (PvpStats) by SaMo`;
+if(R.mode==="match")SEL=ALL[ALL.length-1];
+buildFilters();refresh();
+</script>
+</body>
+</html>

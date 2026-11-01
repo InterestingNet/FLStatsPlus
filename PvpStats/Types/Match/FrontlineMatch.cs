@@ -1,4 +1,4 @@
-﻿using LiteDB;
+using LiteDB;
 using PvpStats.Types.Display;
 using PvpStats.Types.Player;
 using System;
@@ -26,6 +26,11 @@ public class FrontlineMatch : PvpMatch {
     public Dictionary<FrontlineTeamName, FrontlineTeamScoreboard> Teams { get; set; } = new();
 
     public Dictionary<string, int>? MaxBattleHigh { get; set; }
+
+    //FLStatsPlus: rewards from the results packet (PvpStats reads but discards these)
+    public int? WolfMarks { get; set; }
+    public int? SeriesXP { get; set; }
+    public long? JobXP { get; set; }
 
     //Timeline pre-processed data
     public TimeSpan? BattleHighVTime { get; set; }
