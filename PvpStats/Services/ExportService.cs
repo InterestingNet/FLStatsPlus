@@ -272,8 +272,13 @@ internal class ExportService {
                         StatusResisted = e.StatusesResisted == 0 ? null : e.StatusesResisted,
                         Kb = e.KillingBlow ? true : null,
                         Seq = e.GlobalSequence == 0 ? null : e.GlobalSequence,
+                        X = e.SelfX is float x ? MathF.Round(x, 1) : null,
+                        Z = e.SelfZ is float z ? MathF.Round(z, 1) : null,
                     };
                 }).ToList();
+                dto.Actions = rows.Where(r => r.Kind == "action" || r.Kind == "death").Select(r => r.Id).Distinct()
+                    .Select(id => (id, info: ActionMeta(id))).Where(x => x.info != null)
+                    .ToDictionary(x => x.id.ToString(), x => x.info!);
                 dto.CombatSummary = Summarize(rows);
                 if(includeRawCombat) dto.Combat = rows;
             }
@@ -297,8 +302,17 @@ internal class ExportService {
             }).OrderByDescending(r => r.Damage).ToList();
         var outRows = rows.Where(r => r.Dir == "out").ToList();
         var inRows = rows.Where(r => r.Dir == "in").ToList();
+        var casts = GroupCasts(outRows);
+        var dealt = Skills(outRows);
+        foreach(var s in dealt.Where(s => s.Kind == "action")) {
+            var mine = casts.Where(c => c.Name == s.Name).ToList();
+            s.Casts = mine.Count;
+            s.MaxTargets = mine.Count > 0 ? mine.Max(c => c.Targets) : 0;
+            s.BestCast = mine.Count > 0 ? mine.Max(c => c.Damage) : 0;
+        }
         return new CombatSummaryDto {
-            Dealt = Skills(outRows),
+            TopCasts = casts.OrderByDescending(c => c.Damage).Take(15).ToList(),
+            Dealt = dealt,
             Taken = Skills(inRows),
             SelfSkills = Skills(rows.Where(r => r.Dir == "self")),
             Targets = Others(outRows),
@@ -306,6 +320,48 @@ internal class ExportService {
             Kills = outRows.Count(r => r.Kind == "death"),
             Deaths = inRows.Count(r => r.Kind == "death"),
         };
+    }
+
+    /// <summary>
+    /// Groups your outgoing action hits into casts. Hits from one cast share the server's effect
+    /// sequence number; hits without one fall back to same action within 0.5 s.
+    /// </summary>
+    internal static List<CastDto> GroupCasts(IEnumerable<CombatDto> outRows) {
+        var casts = new List<CastDto>();
+        CastDto? last = null;
+        uint? lastSeq = null;
+        foreach(var r in outRows.Where(r => r.Kind == "action").OrderBy(r => r.T)) {
+            bool same = last != null && last.Id == r.Id &&
+                (r.Seq != null ? r.Seq == lastSeq : Math.Abs(r.T - last.T) <= 0.5);
+            if(!same) {
+                last = new CastDto { T = r.T, Id = r.Id, Name = r.Name, X = r.X, Z = r.Z };
+                casts.Add(last);
+                lastSeq = r.Seq;
+            }
+            last!.Hits.Add(new CastHitDto { Other = r.Other, Job = r.OtherJob, Team = r.OtherTeam, Dmg = r.Dmg ?? 0, Heal = r.Heal ?? 0, Crit = r.Crit, Dh = r.Dh, Kb = r.Kb });
+            last.Damage += r.Dmg ?? 0;
+            last.Heal += r.Heal ?? 0;
+            if(r.Crit == true) last.Crits++;
+            if(r.Kb == true) last.Kills++;
+            last.Targets = last.Hits.Select(h => h.Other).Distinct().Count();
+        }
+        return casts;
+    }
+
+    private readonly Dictionary<uint, ActionMetaDto?> _actionMetaCache = [];
+
+    private ActionMetaDto? ActionMeta(uint id) {
+        if(!_actionMetaCache.TryGetValue(id, out var meta)) {
+            var row = _plugin.DataManager.GetExcelSheet<Lumina.Excel.Sheets.Action>().GetRowOrDefault(id);
+            meta = row is null ? null : new ActionMetaDto {
+                Name = row.Value.Name.ExtractText(),
+                RecastSec = row.Value.Recast100ms / 10.0,
+                MaxCharges = row.Value.MaxCharges,
+                Icon = row.Value.Icon,
+            };
+            _actionMetaCache[id] = meta;
+        }
+        return meta;
     }
 
     private string? JobAbbr(uint? classJobId) {
@@ -384,6 +440,41 @@ internal class ExportService {
         public List<double[]>? BattleHigh { get; set; }
         public CombatSummaryDto? CombatSummary { get; set; }
         public List<CombatDto>? Combat { get; set; }
+        /// <summary>action id → recast / charges, for the cooldown lanes in the ability timeline</summary>
+        public Dictionary<string, ActionMetaDto>? Actions { get; set; }
+    }
+
+    internal class ActionMetaDto {
+        public string Name { get; set; } = "";
+        public double RecastSec { get; set; }
+        public int MaxCharges { get; set; }
+        public uint? Icon { get; set; }
+    }
+
+    /// <summary>One use of an ability: every target its effect packet hit, added together.</summary>
+    internal class CastDto {
+        public double T { get; set; }
+        public uint Id { get; set; }
+        public string Name { get; set; } = "";
+        public int Targets { get; set; }
+        public long Damage { get; set; }
+        public long Heal { get; set; }
+        public int Crits { get; set; }
+        public int Kills { get; set; }
+        public float? X { get; set; }
+        public float? Z { get; set; }
+        public List<CastHitDto> Hits { get; set; } = [];
+    }
+
+    internal class CastHitDto {
+        public string Other { get; set; } = "";
+        public string? Job { get; set; }
+        public string? Team { get; set; }
+        public long Dmg { get; set; }
+        public long Heal { get; set; }
+        public bool? Crit { get; set; }
+        public bool? Dh { get; set; }
+        public bool? Kb { get; set; }
     }
 
     internal class TeamDto {
@@ -446,6 +537,8 @@ internal class ExportService {
         public int? StatusResisted { get; set; }
         public bool? Kb { get; set; }
         public uint? Seq { get; set; }
+        public float? X { get; set; }
+        public float? Z { get; set; }
     }
 
     internal class CombatSummaryDto {
@@ -456,6 +549,8 @@ internal class ExportService {
         public List<OtherRowDto> Sources { get; set; } = [];
         public int Kills { get; set; }
         public int Deaths { get; set; }
+        /// <summary>Your 15 biggest casts by total damage.</summary>
+        public List<CastDto> TopCasts { get; set; } = [];
     }
 
     internal class SkillRowDto {
@@ -469,6 +564,9 @@ internal class ExportService {
         public int DirectHits { get; set; }
         public long MaxHit { get; set; }
         public int KillingBlows { get; set; }
+        public int Casts { get; set; }
+        public int MaxTargets { get; set; }
+        public long BestCast { get; set; }
     }
 
     internal class OtherRowDto {

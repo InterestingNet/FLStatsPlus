@@ -62,6 +62,10 @@ public class CombatLogEntry {
     /// <summary>Set on the last hit before a death credited to the other party.</summary>
     public bool KillingBlow { get; set; }
 
-    /// <summary>Server-side effect counter; used to de-duplicate merged logs.</summary>
+    /// <summary>Your position (map X / Z) when the event arrived.</summary>
+    public float? SelfX { get; set; }
+    public float? SelfZ { get; set; }
+
+    /// <summary>Server-side effect counter. Every target hit by one cast shares it, so it groups AoE hits into a cast.</summary>
     public uint GlobalSequence { get; set; }
 }

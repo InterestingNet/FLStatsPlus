@@ -266,7 +266,7 @@ function nav(){
   $('#nav').innerHTML=VIEWS.map(([k,l])=>`<button data-v="${k}" class="${VIEW===k?'on':''} ${k==='match'&&!SEL?'hidden':''}">${l}</button>`).join('');
   $('#nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;refresh()});
 }
-function openMatch(m){SEL=m;VIEW="match";refresh();scrollTo({top:0,behavior:'smooth'})}
+function openMatch(m){SEL=m;VIEW="match";MD.cast=null;MD.atPos=0;refresh();scrollTo({top:0,behavior:'smooth'})}
 
 function refresh(){
   const ms=filtered();
@@ -475,8 +475,8 @@ function viewMeta(v,ms){
 function viewCombat(v,ms){
   const withLog=ms.filter(m=>m.combatSummary);
   if(!withLog.length){v.innerHTML='<section class="panel"><div class="empty">No matches in this selection have a personal combat log.<br>Logs are recorded for Frontline matches played with FLStats Plus.</div></section>';return}
-  const merge=(list,key)=>{const o={};for(const r of list){const k=key(r);const x=(o[k]??={...r,hits:0,damage:0,heal:0,crits:0,directHits:0,killingBlows:0,maxHit:0,matches:0});
-    x.hits+=r.hits||0;x.damage+=r.damage||0;x.heal+=r.heal||0;x.crits+=r.crits||0;x.directHits+=r.directHits||0;x.killingBlows+=r.killingBlows||0;x.maxHit=Math.max(x.maxHit,r.maxHit||0);x.matches++}return Object.values(o)};
+  const merge=(list,key)=>{const o={};for(const r of list){const k=key(r);const x=(o[k]??={...r,hits:0,damage:0,heal:0,crits:0,directHits:0,killingBlows:0,maxHit:0,matches:0,casts:0,maxTargets:0,bestCast:0});
+    x.hits+=r.hits||0;x.damage+=r.damage||0;x.heal+=r.heal||0;x.crits+=r.crits||0;x.directHits+=r.directHits||0;x.killingBlows+=r.killingBlows||0;x.maxHit=Math.max(x.maxHit,r.maxHit||0);x.casts=(x.casts||0)+(r.casts||0);x.maxTargets=Math.max(x.maxTargets||0,r.maxTargets||0);x.bestCast=Math.max(x.bestCast||0,r.bestCast||0);x.matches++}return Object.values(o)};
   const dealt=merge(withLog.flatMap(m=>m.combatSummary.dealt||[]),r=>r.name+"|"+r.kind);
   const taken=merge(withLog.flatMap(m=>m.combatSummary.taken||[]),r=>r.name+"|"+r.kind);
   const targets=merge(withLog.flatMap(m=>m.combatSummary.targets||[]),r=>r.name);
@@ -497,23 +497,30 @@ function viewCombat(v,ms){
     <section class="panel"><header><h2>Damage & Kills by Enemy Job</h2></header><div class="body" id="cJobOut"></div></section>
     <section class="panel"><header><h2>Damage Taken & Deaths by Enemy Job</h2></header><div class="body" id="cJobIn"></div></section>
    </div>
+   <section class="panel"><header><h2>Best Casts — all logged matches</h2><span class="dim">your biggest single uses of a skill (all players hit, added together) · click to open the match</span></header><div class="body" id="cBest"></div></section>
    <div class="grid2">
     <section class="panel"><header><h2>Players You Hit Most</h2></header><div class="body" id="cTargets"></div></section>
     <section class="panel"><header><h2>Players Who Hit You Most</h2></header><div class="body" id="cSources"></div></section>
    </div>`;
-  const skillCols=(tot,color)=>[{k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind!=='action'?` <span class="pill">${r.kind}</span>`:'')},{k:'hits',label:'Hits'},
+  const skillCols=(tot,color)=>[{k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind!=='action'?` <span class="pill">${r.kind}</span>`:'')},{k:'casts',label:'Casts',fmt:v=>v||''},{k:'hits',label:'Hits'},
+    {k:'avgT',label:'Avg Targets',fmt:v=>v?fmt(v,1):''},{k:'maxTargets',label:'Max Targets',fmt:v=>v||''},{k:'bestCast',label:'Best Cast',fmt:v=>v?kfmt(v):''},
     {k:'damage',label:'Damage',def:1,fmt:v=>kfmt(v)+bar(v,tot*0.5,color)},{k:'avg',label:'Avg',fmt:kfmt},{k:'cr',label:'Crit',fmt:v=>pct(v)},{k:'dhr',label:'DH',fmt:v=>pct(v)},{k:'maxHit',label:'Max',fmt:kfmt},{k:'killingBlows',label:'KB'},{k:'heal',label:'Heal',fmt:kfmt}];
-  const deco=rows=>rows.map(r=>({...r,avg:safeDiv(r.damage,r.hits),cr:safeDiv(r.crits,r.hits),dhr:safeDiv(r.directHits,r.hits)}));
+  const deco=rows=>rows.map(r=>({...r,avgT:r.casts?r.hits/r.casts:null,avg:safeDiv(r.damage,r.hits),cr:safeDiv(r.crits,r.hits),dhr:safeDiv(r.directHits,r.hits)}));
   table($('#cDealt'),deco(dealt),skillCols(totD,'var(--dmg)'));
   table($('#cTaken'),deco(taken),skillCols(totT,'var(--bad)'));
   const jc=[{k:'job',label:'Enemy Job',l:1},{k:'players',label:'Player-matches'},{k:'hits',label:'Hits'},{k:'damage',label:'Damage',def:1,fmt:kfmt},{k:'killingBlows',label:'Killing Blows'}];
   table($('#cJobOut'),byJob(targets),jc);table($('#cJobIn'),byJob(sources),jc);
   const oc=[{k:'name',label:'Player',l:1,fmt:(v,r)=>`${r.team?`<span class="t-${r.team}">●</span> `:''}${esc(v)}`},{k:'job',label:'Job',l:1},{k:'matches',label:'Matches'},{k:'hits',label:'Hits'},{k:'damage',label:'Damage',def:1,fmt:kfmt},{k:'killingBlows',label:'KB'}];
   table($('#cTargets'),targets,oc);table($('#cSources'),sources,oc);
+  const best=withLog.flatMap(m=>(m.combatSummary.topCasts||[]).map(c=>({...c,m,map:m.mapName,when:m._t,avg:c.damage/Math.max(1,c.targets)})));
+  table($('#cBest'),best,[{k:'when',label:'Match',l:1,fmt:(v,r)=>`${dt(v)} · ${esc(r.map)}`},{k:'t',label:'At',fmt:mmss},{k:'name',label:'Skill',l:1},{k:'targets',label:'Players Hit'},
+    {k:'damage',label:'Total Damage',def:1,fmt:v=>fmt(v)},{k:'avg',label:'Avg / Target',fmt:kfmt},{k:'kills',label:'Kills'}],
+    {onClick:r=>{openMatch(r.m);setTimeout(()=>{const C=r.m.combat;if(!C)return;const cs=groupCasts(C.filter(c=>c.dir==='out'&&c.kind!=='death'));const hit=cs.find(c=>Math.abs(c.t-r.t)<.05&&c.name===r.name);
+      if(hit){MD.cast=hit;MD.atWin=120;centerWindowOn(r.m,hit.t);drawAbilityTimeline(r.m,cs,deathsOf(C));showCast(r.m,hit,cs);$('#atPanel').scrollIntoView({behavior:'smooth'})}},50)}});
 }
 
 /* ─────────── Match detail ─────────── */
-const MD={totals:true,pct:false,teamFirst:true,cView:'out',cSkill:null,cDir:'all',cText:''};
+const MD={totals:true,pct:false,teamFirst:true,cView:'out',cSkill:null,cDir:'all',cText:'',atWin:0,atPos:0,atCd:true,atMin:1,cast:null};
 function viewMatch(v){
   const m=SEL;if(!m){v.innerHTML='<div class="empty">Select a match.</div>';return}
   const you=m._you,order=[...TEAMS].sort((a,b)=>(m.teams[a]?.placement??9)-(m.teams[b]?.placement??9));
@@ -599,6 +606,79 @@ function drawScoreboard(m,order){
   else{const host=$('#sb');table(host,rows,cols,{sort:'__none',dir:1,rowClass:r=>(r.isYou?'you':'')+(r._team?' teamrow':'')});
     host.querySelector('.flex').insertAdjacentHTML('afterbegin','<span class="dim" style="margin-right:auto">Switch to "No grouping" to sort by any column.</span>');}
 }
+/* ─────────── casts / ability timeline ─────────── */
+function groupCasts(out){
+  // hits from one cast share the server effect sequence; fall back to same skill within 0.5 s
+  const res=[];let last=null;
+  for(const r of out.filter(r=>r.kind==='action').sort((a,b)=>a.t-b.t)){
+    const same=last&&last.id===r.id&&(r.seq!=null?r.seq===last.seq:Math.abs(r.t-last.t)<=.5);
+    if(!same){last={t:r.t,id:r.id,name:r.name,seq:r.seq,x:r.x,z:r.z,hits:[],damage:0,heal:0,crits:0,kills:0,targets:0};res.push(last)}
+    last.hits.push({other:r.other,job:r.otherJob,team:r.otherTeam,dmg:r.dmg||0,heal:r.heal||0,crit:r.crit,dh:r.dh,kb:r.kb,hp:r.otherHp,maxHp:r.otherMaxHp});
+    last.damage+=r.dmg||0;last.heal+=r.heal||0;if(r.crit)last.crits++;if(r.kb)last.kills++;
+    last.targets=new Set(last.hits.map(h=>h.other)).size;
+  }
+  return res;
+}
+function deathsOf(C){return C.filter(c=>c.kind==='death')}
+function recastOf(m,c){const a=m.actions&&m.actions[c.id];return a?{cd:a.recastSec||0,ch:a.maxCharges||0}:{cd:0,ch:0}}
+function idleReady(m,casts){
+  const by={},res={};casts.forEach(c=>(by[c.name]??=[]).push(c));
+  for(const [n,cs] of Object.entries(by)){const{cd,ch}=recastOf(m,cs[0]);if(cd<5||ch>1)continue;let idle=0;
+    for(let i=0;i<cs.length-1;i++)idle+=Math.max(0,cs[i+1].t-(cs[i].t+cd));res[n]=idle}
+  return res;
+}
+function atWindow(m){const W=+MD.atWin||m.durationSec;const start=W>=m.durationSec?0:MD.atPos/1000*(m.durationSec-W);return[start,Math.min(m.durationSec,start+W)]}
+function centerWindowOn(m,t){if(!+MD.atWin||+MD.atWin>=m.durationSec)return;const W=+MD.atWin;MD.atPos=Math.round(Math.max(0,Math.min(1,(t-W/2)/(m.durationSec-W)))*1000)}
+function drawAbilityTimeline(m,casts,deaths){
+  const host=$('#atl');if(!host)return;
+  $('#atWin').value=MD.atWin;$('#atMin').value=MD.atMin;$('#atPos').value=MD.atPos;$('#atPos').disabled=!+MD.atWin;
+  const[w0,w1]=atWindow(m),span=Math.max(1,w1-w0);
+  const vis=casts.filter(c=>c.targets>=MD.atMin);
+  const lanes=Object.entries(casts.reduce((o,c)=>(o[c.name]=(o[c.name]||0)+c.damage,o),{})).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  const LW=150,W=1000,LH=34,TOP=22,H=TOP+lanes.length*LH+20,X=t=>LW+(t-w0)/span*(W-LW-8);
+  const maxD=Math.max(1,...casts.map(c=>c.damage));
+  let g='';
+  // grid
+  const step=span>600?60:span>240?30:span>90?10:span>40?5:2;
+  for(let t=Math.ceil(w0/step)*step;t<=w1;t+=step)g+=`<line x1="${X(t)}" x2="${X(t)}" y1="${TOP-4}" y2="${H-18}" stroke="rgba(255,255,255,.05)"/><text x="${X(t)}" y="${H-5}" text-anchor="middle">${mmss(t)}</text>`;
+  lanes.forEach((n,i)=>{const y=TOP+i*LH;g+=`<rect x="0" y="${y}" width="${W}" height="${LH}" fill="${i%2?'rgba(255,255,255,.02)':'transparent'}"/><text x="6" y="${y+LH/2+4}" style="fill:var(--text);font-size:11.5px">${esc(n.length>20?n.slice(0,19)+'…':n)}</text>`;
+    if(MD.atCd){const cs=casts.filter(c=>c.name===n).sort((a,b)=>a.t-b.t);const{cd,ch}=recastOf(m,cs[0]);
+      if(cd>=5)cs.forEach((c,j)=>{const a=Math.max(c.t,w0),b=Math.min(c.t+cd,w1);
+        if(b>a)g+=`<rect x="${X(a)}" y="${y+LH-8}" width="${X(b)-X(a)}" height="4" rx="2" fill="rgba(160,160,160,.45)" data-tip="${esc(n)} on cooldown ${mmss(c.t)} → ${mmss(c.t+cd)} (${cd}s${ch>1?`, ${ch} charges`:''})"/>`;
+        const nx=cs[j+1];if(ch<=1&&nx&&nx.t>c.t+cd+.5){const ra=Math.max(c.t+cd,w0),rb=Math.min(nx.t,w1);
+          if(rb>ra)g+=`<rect x="${X(ra)}" y="${y+LH-8}" width="${X(rb)-X(ra)}" height="4" rx="2" fill="rgba(95,184,122,.55)" data-tip="${esc(n)} ready but not used for ${(nx.t-c.t-cd).toFixed(1)}s (${mmss(c.t+cd)} → ${mmss(nx.t)})"/>`}})}});
+  deaths.filter(d=>d.t>=w0&&d.t<=w1).forEach(d=>g+=`<line x1="${X(d.t)}" x2="${X(d.t)}" y1="${TOP}" y2="${H-18}" stroke="${d.dir==='in'?'var(--bad)':'var(--good)'}" stroke-dasharray="3 3" opacity=".7"/><text x="${X(d.t)}" y="${TOP-8}" text-anchor="middle" style="font-size:12px;fill:${d.dir==='in'?'var(--bad)':'var(--good)'}" data-tip="${d.dir==='in'?'Killed by':'You killed'} ${esc(d.other)} — ${esc(d.name)} at ${mmss(d.t)}">${d.dir==='in'?'☠':'⚔'}</text>`);
+  vis.filter(c=>c.t>=w0&&c.t<=w1).sort((a,b)=>b.damage-a.damage).forEach(c=>{const y=TOP+lanes.indexOf(c.name)*LH+LH/2-2,r=4+11*Math.sqrt(c.damage/maxD),sel=MD.cast===c;
+    g+=`<g class="cast" data-ci="${casts.indexOf(c)}" style="cursor:pointer" data-tip="<b>${esc(c.name)}</b> at ${mmss(c.t)}<br>${c.targets} player${c.targets>1?'s':''} hit · <b>${fmt(c.damage)}</b> total${c.targets>1?` · avg ${fmt(c.damage/c.targets)}`:''}${c.crits?`<br>${c.crits} crit${c.crits>1?'s':''}`:''}${c.kills?`<br>⚔ ${c.kills} kill${c.kills>1?'s':''}`:''}">
+      <circle cx="${X(c.t)}" cy="${y}" r="${r}" fill="var(--dmg)" fill-opacity="${c.targets>1?.85:.55}" stroke="${sel?'#fff':c.kills?'var(--gold2)':'rgba(0,0,0,.4)'}" stroke-width="${sel||c.kills?2:1}"/>
+      ${c.targets>1&&r>=8?`<text x="${X(c.t)}" y="${y+3.5}" text-anchor="middle" style="fill:#1a1209;font-size:10px;font-weight:700">${c.targets}</text>`:''}</g>`});
+  host.innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>${lanes.length?'':'<div class="empty">No casts recorded.</div>'}`;
+  host.querySelectorAll('.cast').forEach(n=>n.onclick=()=>{MD.cast=casts[+n.dataset.ci];drawAbilityTimeline(m,casts,deaths);showCast(m,MD.cast,casts)});
+  bindTips(host);
+  const redraw=()=>drawAbilityTimeline(m,casts,deaths);
+  $('#atWin').onchange=e=>{MD.atWin=+e.target.value;if(MD.cast)centerWindowOn(m,MD.cast.t);redraw()};
+  $('#atPos').oninput=e=>{MD.atPos=+e.target.value;redraw()};
+  $('#atMin').onchange=e=>{MD.atMin=+e.target.value;redraw()};
+  $('#atCd').onclick=()=>{MD.atCd=!MD.atCd;$('#atCd').classList.toggle('on',MD.atCd);redraw()};
+}
+function showCast(m,c,casts){
+  const host=$('#castDetail');if(!host||!c)return;
+  const same=casts.filter(x=>x.name===c.name).sort((a,b)=>a.t-b.t),i=same.findIndex(x=>x.t===c.t),prev=same[i-1],next=same[i+1];
+  const{cd,ch}=recastOf(m,c);let ready='';
+  if(cd>=5&&ch<=1&&prev){const up=prev.t+cd;ready=c.t-up>.5?`came off cooldown at ${mmss(up)} — <b>${(c.t-up).toFixed(1)}s</b> before you used it`:'used as soon as it came off cooldown'}
+  else if(cd>=5&&ch<=1&&!prev)ready='first use this match';
+  const maxH=Math.max(1,...c.hits.map(h=>h.dmg));
+  host.innerHTML=`<div class="deathbox"><div class="flex"><b style="font-size:14px">${esc(c.name)} at ${mmss(c.t)}</b>
+     <span>· ${c.targets} player${c.targets>1?'s':''} hit · <span class="dmg"><b>${fmt(c.damage)}</b></span> total${c.targets>1?` · avg ${fmt(c.damage/c.targets)}`:''}${c.heal?` · <span class="heal">+${fmt(c.heal)}</span>`:''}${c.crits?` · ${c.crits} crit`:''}${c.kills?` · ⚔ ${c.kills} kill`:''}</span>
+     <span class="right flex">${prev?`<button class="btn" data-nav="${casts.indexOf(prev)}">◀ previous ${esc(c.name)}</button>`:''}${next?`<button class="btn" data-nav="${casts.indexOf(next)}">next ▶</button>`:''}</span></div>
+    <div class="dim" style="margin:4px 0 8px">${ready}${ready&&c.x!=null?' · ':''}${c.x!=null?`your position X ${c.x} / Z ${c.z}`:''}</div>
+    <table><thead><tr><th class="l">Player hit</th><th class="l">Job</th><th>Damage</th><th class="l">Flags</th><th>HP before</th></tr></thead><tbody>
+    ${[...c.hits].sort((a,b)=>b.dmg-a.dmg).map(h=>`<tr><td class="l">${h.team?`<span class="t-${h.team}">●</span> `:''}${esc(h.other)}</td><td class="l">${esc(h.job||'')}</td>
+      <td>${fmt(h.dmg)}${bar(h.dmg,maxH,'var(--dmg)')}</td><td class="l">${[h.crit&&'<span style="color:var(--crit)">CRIT</span>',h.dh&&'<span style="color:var(--dh)">DH</span>',h.kb&&'<b>⚔ kill</b>'].filter(Boolean).join(' ')}</td>
+      <td>${h.hp!=null&&h.maxHp?pct(h.hp/h.maxHp,0):''}</td></tr>`).join('')}</tbody></table></div>`;
+  host.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const n=casts[+b.dataset.nav];MD.cast=n;centerWindowOn(m,n.t);
+    if($('#atl'))drawAbilityTimeline(m,casts,deathsOf(m.combat||[]));showCast(m,n,casts)});
+}
 function combatCsv(m){
   const h=["t_s","direction","kind","skill","other","other_job","other_team","damage","heal","mp_drain","crit","direct_hit","blocked","parried","missed","invulnerable","killing_blow","pet"];
   return [csvRow(h),...m.combat.map(c=>csvRow([c.t,c.dir,c.kind,c.name,c.other,c.otherJob,c.otherTeam,c.dmg||0,c.heal||0,c.mpDrain||0,!!c.crit,!!c.dh,!!c.blocked,!!c.parried,!!c.miss,!!c.invuln,!!c.kb,!!c.pet]))].join("\n");
@@ -617,6 +697,16 @@ function drawCombat(m){
      ["Hits landed",fmt(hitsOut)],["Crit rate",pct(crits/Math.max(1,hitsOut))],["Killing blows",fmt(C?C.filter(c=>c.kind==='death'&&c.dir==='out').length:S.kills)],["Deaths",fmt(C?C.filter(c=>c.kind==='death'&&c.dir==='in').length:S.deaths)]]
      .map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div></section>
   ${C?`<section class="panel"><header><h2>Combat Timeline</h2><span class="dim">your damage per 15 s · <span class="bad">▼</span> damage taken · ☠ deaths (click for recap) · ⚔ kills</span></header><div class="body"><div id="ctl"></div><div id="recap"></div></div></section>`:''}
+  ${C?`<section class="panel" id="atPanel"><header><h2>Ability Timeline</h2><div class="flex">
+     <span class="dim">window</span><select id="atWin"><option value="0">Whole match</option><option value="300">5 min</option><option value="120">2 min</option><option value="60">1 min</option><option value="30">30 s</option></select>
+     <input type="range" id="atPos" min="0" max="1000" value="0" style="width:180px" title="Scroll through the match">
+     <span class="dim">min targets</span><select id="atMin"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option></select>
+     <button class="btn ${MD.atCd?'on':''}" id="atCd" title="Show when each skill was on cooldown (grey) and ready but not used (green)">Cooldowns</button></div></header>
+    <div class="body"><div id="atl"></div>
+     <div class="legend"><span><i class="dot" style="background:var(--dmg)"></i>one cast — size = total damage, number = players hit</span><span><i class="dot" style="background:var(--gold2)"></i>cast scored a kill</span>
+      <span><i class="dot" style="background:rgba(160,160,160,.6)"></i>on cooldown</span><span><i class="dot" style="background:rgba(95,184,122,.6)"></i>ready but not used</span><span class="bad">┊ your deaths</span></div>
+     <div id="castDetail"></div></div></section>`:''}
+  <section class="panel"><header><h2>Biggest Casts</h2><span class="dim">every target a single cast hit, added together · click for the breakdown</span></header><div class="body" id="topCasts"></div></section>
   <div class="grid2">
    <section class="panel"><header><h2 id="skillTitle">Skills</h2><div class="flex"><button class="btn ${MD.cView==='out'?'on':''}" data-cv="out">Dealt</button><button class="btn ${MD.cView==='in'?'on':''}" data-cv="in">Taken</button></div></header><div class="body" id="cSkills"></div></section>
    <section class="panel"><header><h2 id="tgtTitle">Targets</h2></header><div class="body" id="cTargets"></div></section>
@@ -641,6 +731,16 @@ function drawCombat(m){
       $('#recap').innerHTML=`<div class="deathbox"><b>${d.dir==='in'?'☠ Death':'⚔ Kill'} at ${mmss(d.t)}</b> — ${d.dir==='in'?'killed by':'you killed'} ${esc(d.other)} ${d.otherJob?`<span class="pill">${esc(d.otherJob)}</span>`:''}<br><span class="dim">last 10 seconds:</span><br>`+
         (win.length?win.slice(-12).map(c=>`${mmss(c.t)} &nbsp;${c.dir==='in'?esc(c.other):'You'} → ${c.dir==='in'?'you':esc(c.other)} · ${esc(c.name)} ${c.dmg?`<span class="dmg">${fmt(c.dmg)}</span>`:''}${c.heal?`<span class="heal">+${fmt(c.heal)}</span>`:''}${c.crit?' <span style="color:var(--crit)">!</span>':''}${c.dh?' <span style="color:var(--dh)">DH</span>':''}${c.kb?' <b>☠ killing blow</b>':''}${c.otherHp!=null&&c.otherMaxHp?` <span class="dim">(${pct(c.otherHp/c.otherMaxHp,0)} HP before)</span>`:''}`).join('<br>'):'<span class="dim">no hits recorded in range</span>')+`</div>`});
   }
+  // casts (ability timeline)
+  const casts=C?groupCasts(out):(S.topCasts||[]);
+  const castStats={};casts.forEach(c=>{const x=(castStats[c.name]??={casts:0,targets:0,maxTargets:0,best:0});x.casts++;x.targets+=c.targets;x.maxTargets=Math.max(x.maxTargets,c.targets);x.best=Math.max(x.best,c.damage)});
+  const idle=C?idleReady(m,casts):{};
+  if(C)drawAbilityTimeline(m,casts,deathsOf(C));
+  table($('#topCasts'),[...casts].sort((a,b)=>b.damage-a.damage).slice(0,C?40:15).map(c=>({...c,_c:c,avg:c.damage/Math.max(1,c.targets)})),[
+    {k:'t',label:'Time',l:1,fmt:mmss},{k:'name',label:'Skill',l:1},{k:'targets',label:'Players Hit'},{k:'damage',label:'Total Damage',def:1,fmt:v=>fmt(v)},
+    {k:'avg',label:'Avg / Target',fmt:kfmt},{k:'crits',label:'Crits'},{k:'kills',label:'Kills'}],
+    {onClick:r=>{const c=r._c;MD.cast=c;if(C){centerWindowOn(m,c.t);drawAbilityTimeline(m,casts,deathsOf(C))}showCast(m,c,casts);$('#castDetail')?.scrollIntoView({behavior:'smooth',block:'nearest'})}});
+  if(!C)$('#topCasts').insertAdjacentHTML('beforeend','<div class="note">Raw log not embedded in this report — showing the 15 biggest casts. Export this match on its own for the full ability timeline.</div>');
   // skills/targets
   const dir=MD.cView;
   let skills,others;
@@ -653,10 +753,13 @@ function drawCombat(m){
     others=Object.values(o);
   }else{skills=(dir==='out'?S.dealt:S.taken).map(r=>({...r}));others=(dir==='out'?S.targets:S.sources).map(r=>({...r}))}
   const tot=sum(skills,r=>r.damage)||1;
-  skills.forEach(r=>{r.avg=safeDiv(r.damage,r.hits);r.cr=safeDiv(r.crits,r.hits);r.dhr=safeDiv(r.directHits,r.hits);r.share=r.damage/tot});
+  skills.forEach(r=>{r.avg=safeDiv(r.damage,r.hits);r.cr=safeDiv(r.crits,r.hits);r.dhr=safeDiv(r.directHits,r.hits);r.share=r.damage/tot;
+    const cs=dir==='out'&&castStats[r.name];r.casts=cs?cs.casts:(r.casts||null);r.avgT=cs?cs.targets/cs.casts:null;r.maxT=cs?cs.maxTargets:(r.maxTargets||null);r.best=cs?cs.best:(r.bestCast||null);r.idle=dir==='out'?idle[r.name]??null:null});
   $('#skillTitle').textContent=dir==='out'?'Your Skills':'Skills Used On You';
   $('#tgtTitle').textContent=dir==='out'?`Targets — ${MD.cSkill||'all skills'}`:`Attackers — ${MD.cSkill||'all skills'}`;
-  table($('#cSkills'),skills,[{k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind!=='action'?` <span class="pill">${r.kind}</span>`:'')},{k:'hits',label:'Hits'},
+  table($('#cSkills'),skills,[{k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind!=='action'?` <span class="pill">${r.kind}</span>`:'')},{k:'casts',label:'Casts',fmt:v=>v??''},{k:'hits',label:'Hits'},
+    {k:'avgT',label:'Avg Targets',fmt:v=>v==null?'':fmt(v,1)},{k:'maxT',label:'Max Targets',fmt:v=>v??''},{k:'best',label:'Best Cast',fmt:v=>v?kfmt(v):''},
+    {k:'idle',label:'Ready & Unused',fmt:v=>v==null?'':mmss(v),title:'Time this skill sat off cooldown between uses (single-charge skills with a cooldown of 5 s or more)'},
     {k:'damage',label:'Damage',def:1,fmt:v=>fmt(v)},{k:'avg',label:'Avg',fmt:kfmt},{k:'cr',label:'Crit',fmt:v=>pct(v)},{k:'dhr',label:'DH',fmt:v=>pct(v)},{k:'maxHit',label:'Max',fmt:kfmt},
     {k:'killingBlows',label:'KB'},{k:'heal',label:'Heal',fmt:kfmt},{k:'share',label:'Share',fmt:v=>pct(v)+bar(v,Math.max(...skills.map(s=>s.share)),dir==='out'?'var(--dmg)':'var(--bad)')}],
     {rowClass:r=>MD.cSkill===r.name?'sel':'',onClick:C?(r=>{MD.cSkill=MD.cSkill===r.name?null:r.name;drawCombat(m);bindTips(host)}):null});

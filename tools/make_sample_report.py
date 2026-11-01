@@ -42,10 +42,10 @@ def iso(t):
     return t.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def make_match(i, start, with_combat):
-    mid, mname, mtype = random.choice(MAPS)
+def make_match(i, start, with_combat, demo=False):
+    mid, mname, mtype = MAPS[2] if demo else random.choice(MAPS)
     dur = random.randint(11 * 60, 20 * 60)
-    myjob = random.choice(MY_JOBS)
+    myjob = MY_JOBS[0] if demo else random.choice(MY_JOBS)
     my_team = random.choice(TEAMS)
     strength = {t: random.gauss(1, .18) for t in TEAMS}
     strength[my_team] += .06
@@ -114,14 +114,25 @@ def make_match(i, start, with_combat):
         skills = SKILLS[myjob[0]]
         combat = []
         t = 3.0
+        seq = 1000
+        ready = {sk[0]: 0.0 for sk in skills}
+        aoe = {"Bioblaster": 12, "Full Metal Field": 10, "Scattergun": 8, "Salted Earth": 6, "Plunge": 1, "Disesteem": 8,
+               "Marksman's Spite": 1, "Wildfire": 1, "Toxikon II": 6, "Pneuma": 8, "Phlegma III": 4}
+        x, z = random.uniform(-80, 80), random.uniform(-80, 80)
         while t < dur:
-            name, pot, cd = random.choice(skills[:3] if random.random() < .6 else skills)
-            n = 1 + (random.random() < .25) * random.randint(1, 3)
-            for _ in range(n):
-                e = random.choice(enemies[:30])
+            avail = [sk for sk in skills if ready[sk[0]] <= t]
+            big = [sk for sk in avail if sk[2] >= 10]
+            name, pot, cd = random.choice(big) if big and random.random() < .45 else random.choice([sk for sk in avail if sk[2] < 10] or avail)
+            ready[name] = t + cd
+            seq += 1
+            x += random.uniform(-6, 6); z += random.uniform(-6, 6)
+            n = 1
+            if name in aoe and aoe[name] > 1:
+                n = max(1, min(aoe[name], int(random.expovariate(1 / 3.5)) + 1))
+            for e in random.sample(enemies[:30], n):
                 crit, dh = random.random() < .12, random.random() < .08
                 amt = pot * random.uniform(.85, 1.15) * (1.5 if crit else 1) * (1.25 if dh else 1)
-                row = dict(t=round(t, 1), dir="out", kind="action", id=29400 + skills.index((name, pot, cd)), name=name,
+                row = dict(t=round(t, 1), dir="out", kind="action", id=29400 + skills.index((name, pot, cd)), name=name, seq=seq, x=round(x, 1), z=round(z, 1),
                            other=f'{e["name"]} {e["world"]}', otherPlayer=True, otherJob=e["job"], otherTeam=e["team"],
                            otherHp=random.randint(5000, 52000), otherMaxHp=52000)
                 if amt > 0:
@@ -155,6 +166,7 @@ def make_match(i, start, with_combat):
                                otherPlayer=True, otherJob=c["otherJob"], otherTeam=c["otherTeam"]))
         combat.sort(key=lambda c: c["t"])
         m["combat"] = combat
+        m["actions"] = {str(29400 + i): dict(name=sk[0], recastSec=sk[2], maxCharges=0) for i, sk in enumerate(skills)}
         m["combatSummary"] = summarize(combat)
     return m
 
@@ -183,7 +195,24 @@ def summarize(rows):
 
     out = [r for r in rows if r["dir"] == "out"]
     inc = [r for r in rows if r["dir"] == "in"]
-    return dict(dealt=skills(out), taken=skills(inc), selfSkills=skills([r for r in rows if r["dir"] == "self"]),
+    casts = []
+    for r in sorted((r for r in out if r["kind"] == "action"), key=lambda r: r["t"]):
+        if casts and casts[-1]["id"] == r["id"] and casts[-1]["_seq"] == r.get("seq"):
+            c = casts[-1]
+        else:
+            c = dict(t=r["t"], id=r["id"], name=r["name"], _seq=r.get("seq"), x=r.get("x"), z=r.get("z"), targets=0, damage=0, heal=0, crits=0, kills=0, hits=[])
+            casts.append(c)
+        c["hits"].append(dict(other=r["other"], job=r.get("otherJob"), team=r.get("otherTeam"), dmg=r.get("dmg", 0), heal=r.get("heal", 0), crit=r.get("crit"), dh=r.get("dh"), kb=r.get("kb")))
+        c["damage"] += r.get("dmg", 0); c["crits"] += 1 if r.get("crit") else 0; c["kills"] += 1 if r.get("kb") else 0
+        c["targets"] = len({h["other"] for h in c["hits"]})
+    for c in casts:
+        c.pop("_seq")
+    dealt = skills(out)
+    for s_ in dealt:
+        mine = [c for c in casts if c["name"] == s_["name"]]
+        if mine and s_["kind"] == "action":
+            s_.update(casts=len(mine), maxTargets=max(c["targets"] for c in mine), bestCast=max(c["damage"] for c in mine))
+    return dict(topCasts=sorted(casts, key=lambda c: -c["damage"])[:15], dealt=dealt, taken=skills(inc), selfSkills=skills([r for r in rows if r["dir"] == "self"]),
                 targets=others(out), sources=others(inc),
                 kills=sum(1 for r in out if r["kind"] == "death"), deaths=sum(1 for r in inc if r["kind"] == "death"))
 
@@ -193,7 +222,7 @@ def main():
     n = int(sys.argv[3]) if len(sys.argv) > 3 else 60
     now = datetime(2026, 10, 31, 22, 0, tzinfo=timezone.utc)
     starts = sorted(now - timedelta(hours=random.uniform(0, 24 * 45)) for _ in range(n))
-    matches = [make_match(i, s, with_combat=i >= n - 6) for i, s in enumerate(starts)]
+    matches = [make_match(i, s, with_combat=i >= n - 6, demo=i == n - 1) for i, s in enumerate(starts)]
     report = dict(schema=1, plugin="FLStats Plus 0.1.0.0 (SAMPLE DATA)", generated=iso(now), mode="history", matches=matches)
     data = json.dumps(report, separators=(",", ":")).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     html = open(tpl, encoding="utf-8").read()

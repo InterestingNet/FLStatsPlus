@@ -29,6 +29,7 @@ This one format is used by the HTML report (embedded in `<script id="report-data
 | teamPoints | `{ team: [[t, points], ...] }` | team score over time |
 | battleHigh | `[[t, battleHighPoints], ...]` | your Battle High points over time (Battle High V at 100) |
 | combatSummary | CombatSummary | per-match rollup of your combat log |
+| actions | `{ actionId: { name, recastSec, maxCharges, icon } }` | cooldown info for the ability timeline |
 | combat | CombatEntry[] | raw combat log (single-match reports, JSON exports, small history reports) |
 
 **Team**: `placement` (0 = 1st), `totalPoints`, `killPoints`, `deathPointLosses`, `occupationPoints`, `targetablePoints` (ice / tomeliths), `dronePoints`.
@@ -50,10 +51,13 @@ This one format is used by the HTML report (embedded in `<script id="report-data
 | crit, dh, blocked, parried, miss, invuln | hit flags |
 | statusApplied, statusResisted | number of status effects the action applied or that were resisted |
 | kb | this hit was the killing blow |
-| seq | server effect sequence number, used to remove duplicates when merging logs |
+| seq | server effect sequence number. Every target one cast hit shares it, so it is how AoE hits are grouped into a single cast |
+| x, z | your position when the event arrived |
 
 ## CombatSummary
 
 `dealt`, `taken`, `selfSkills`: SkillRow[] (`name`, `kind`, `icon`, `hits`, `damage`, `heal`, `crits`, `directHits`, `maxHit`, `killingBlows`).
 `targets`, `sources`: OtherRow[] (`name`, `job`, `team`, `hits`, `damage`, `heal`, `killingBlows`).
 `kills`, `deaths`: ints.
+`topCasts`: your 15 biggest casts: `t`, `id`, `name`, `targets`, `damage`, `heal`, `crits`, `kills`, `x`, `z`, `hits[]` (`other`, `job`, `team`, `dmg`, `heal`, `crit`, `dh`, `kb`).
+Rows in `dealt` also carry `casts`, `maxTargets` and `bestCast`.

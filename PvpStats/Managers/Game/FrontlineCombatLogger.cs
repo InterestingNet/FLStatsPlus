@@ -70,6 +70,11 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
     }
 
     private void Add(CombatLogEntry entry) {
+        var me = _plugin.ObjectTable.LocalPlayer;
+        if(me != null) {
+            entry.SelfX = me.Position.X;
+            entry.SelfZ = me.Position.Z;
+        }
         lock(_lock) {
             _sink?.Add(entry);
         }
@@ -298,6 +303,11 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                         entry.Icon = e.Icon;
                         break;
                     }
+                }
+                var me = _plugin.ObjectTable.LocalPlayer;
+                if(me != null) {
+                    entry.SelfX = me.Position.X;
+                    entry.SelfZ = me.Position.Z;
                 }
                 _sink.Add(entry);
             }
