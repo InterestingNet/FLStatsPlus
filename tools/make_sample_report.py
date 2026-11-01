@@ -34,6 +34,7 @@ SKILLS = {
             ("Salted Earth", 3000, 30), ("Disesteem", 9000, 30), ("Eventide", 0, 120)],
     "SGE": [("Dosis III", 5000, 2.5), ("Phlegma III", 7000, 10), ("Pneuma", 8000, 30), ("Toxikon II", 4000, 10), ("Psyche", 6000, 20)],
 }
+DOTS = {"Bioblaster": (3082, 1800, 5), "Salted Earth": (3086, 1200, 6), "Toxikon II": (3084, 1500, 5)}  # status id, per tick, ticks
 INCOMING = ["Smite", "Midare Setsugekka", "Fell Cleave", "Foul", "Saber Dance", "Holy III", "Communio", "Verholy",
             "Phantom Rush", "Blizzard IV", "Starfall Dance", "Fated Circle", "Bloodspiller"]
 
@@ -137,6 +138,14 @@ def make_match(i, start, with_combat, demo=False):
                            otherHp=random.randint(5000, 52000), otherMaxHp=52000)
                 if amt > 0:
                     row["dmg"] = int(amt)
+                if name in DOTS:
+                    sid, per, nt = DOTS[name]
+                    row["statuses"] = [sid]
+                    for k_ in range(1, nt + 1):
+                        if random.random() < .88 and t + 3 * k_ < dur:
+                            combat.append(dict(t=round(t + 3 * k_ + random.uniform(0, .4), 1), dir="out", kind="dot", id=sid, name=name,
+                                               other=row["other"], otherPlayer=True, otherJob=e["job"], otherTeam=e["team"],
+                                               dmg=int(per * random.uniform(.9, 1.1))))
                 if crit: row["crit"] = True
                 if dh: row["dh"] = True
                 combat.append(row)
@@ -152,6 +161,12 @@ def make_match(i, start, with_combat, demo=False):
             if random.random() < .1: row["crit"] = True
             combat.append(row)
             t += random.uniform(3, 9)
+        # a few stray ticks with no matching cast (e.g. a status applied out of view)
+        for _ in range(6):
+            e = random.choice(enemies[:30]); t0 = random.uniform(30, dur - 20)
+            for k_ in range(4):
+                combat.append(dict(t=round(t0 + 3 * k_, 1), dir="out", kind="dot", id=1234, name="Burns", other=f'{e["name"]} {e["world"]}',
+                                   otherPlayer=True, otherJob=e["job"], otherTeam=e["team"], dmg=random.randint(900, 1300)))
         combat.sort(key=lambda c: c["t"])
         # kills & deaths
         outs = [c for c in combat if c["dir"] == "out" and c.get("dmg")]
@@ -202,17 +217,39 @@ def summarize(rows):
         else:
             c = dict(t=r["t"], id=r["id"], name=r["name"], _seq=r.get("seq"), x=r.get("x"), z=r.get("z"), targets=0, damage=0, heal=0, crits=0, kills=0, hits=[])
             casts.append(c)
+        c.setdefault("_st", set()).update(r.get("statuses", []))
         c["hits"].append(dict(other=r["other"], job=r.get("otherJob"), team=r.get("otherTeam"), dmg=r.get("dmg", 0), heal=r.get("heal", 0), crit=r.get("crit"), dh=r.get("dh"), kb=r.get("kb")))
         c["damage"] += r.get("dmg", 0); c["crits"] += 1 if r.get("crit") else 0; c["kills"] += 1 if r.get("kb") else 0
         c["targets"] = len({h["other"] for h in c["hits"]})
+    for tk in sorted((r for r in out if r["kind"] in ("dot", "hot")), key=lambda r: r["t"]):
+        best = None
+        for c in reversed(casts):
+            if c["t"] > tk["t"]:
+                continue
+            if tk["t"] - c["t"] > 60:
+                break
+            if any(h["other"] == tk["other"] for h in c["hits"]) and (tk["id"] in c.get("_st", ()) or c["name"] == tk["name"]):
+                best = c
+                break
+        if not best:
+            continue
+        tk["castT"] = best["t"]
+        best["ticks"] = best.get("ticks", 0) + 1
+        best["tickDamage"] = best.get("tickDamage", 0) + tk.get("dmg", 0)
+        best["lastTickT"] = tk["t"]
+        h = next(h for h in best["hits"] if h["other"] == tk["other"])
+        h["ticks"] = h.get("ticks", 0) + 1
+        h["tickDmg"] = h.get("tickDmg", 0) + tk.get("dmg", 0)
     for c in casts:
-        c.pop("_seq")
+        c.pop("_seq"); c.pop("_st", None)
+        c["total"] = c["damage"] + c.get("tickDamage", 0)
     dealt = skills(out)
     for s_ in dealt:
         mine = [c for c in casts if c["name"] == s_["name"]]
         if mine and s_["kind"] == "action":
-            s_.update(casts=len(mine), maxTargets=max(c["targets"] for c in mine), bestCast=max(c["damage"] for c in mine))
-    return dict(topCasts=sorted(casts, key=lambda c: -c["damage"])[:15], dealt=dealt, taken=skills(inc), selfSkills=skills([r for r in rows if r["dir"] == "self"]),
+            s_.update(casts=len(mine), maxTargets=max(c["targets"] for c in mine), bestCast=max(c["total"] for c in mine),
+                      tickDamage=sum(c.get("tickDamage", 0) for c in mine))
+    return dict(topCasts=sorted(casts, key=lambda c: -c["total"])[:15], dealt=dealt, taken=skills(inc), selfSkills=skills([r for r in rows if r["dir"] == "self"]),
                 targets=others(out), sources=others(inc),
                 kills=sum(1 for r in out if r["kind"] == "death"), deaths=sum(1 for r in inc if r["kind"] == "death"))
 

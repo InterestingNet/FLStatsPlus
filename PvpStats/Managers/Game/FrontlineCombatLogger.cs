@@ -214,7 +214,9 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                         case ActionEffectType.PartialInvulnerable:
                             e.Invulnerable = true; any = true; break;
                         case ActionEffectType.ApplyStatusEffectTarget:
-                            e.StatusesApplied++; any = true; break;
+                            e.StatusesApplied++;
+                            (e.AppliedStatusIds ??= []).Add(fx.Value);
+                            any = true; break;
                         case ActionEffectType.StatusNoEffect:
                         case ActionEffectType.FullResistStatus:
                             e.StatusesResisted++; any = true; break;

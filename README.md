@@ -37,7 +37,7 @@ Tabs, all with the same filters (map, your job, result, dates, tags, favorites, 
 - **Jobs** / **Players** – PvpStats' job and player tables, for you, teammates, opponents or everyone, with heat-map colouring.
 - **Meta** – how evenly teams share kills, damage and healing (top-1 / top-4 share and Gini coefficient).
 - **Combat** – your skills across all logged matches, skills used on you, damage and kills by enemy job, players you hit most and players who hit you most.
-- **Ability Timeline** (in Match Detail) – one lane per skill, one bubble per cast. Bubble size is the **total damage of that cast across every player it hit**, and the number inside is how many players it hit, so a 12-player Bioblaster at Onsal mid stands out. Grey bars show when a skill was on cooldown, green bars show when it was ready but you hadn't used it, and dashed lines mark your deaths and kills. You can zoom to a 30 s / 1 / 2 / 5 minute window and hide small casts. Click a cast to see every player it hit, how much each took, crits, kills, their HP before the hit, your position, and how long the skill had been ready. **Biggest Casts** lists your top casts in the match, and the **Combat** tab lists your best casts across all matches.
+- **Ability Timeline** (in Match Detail) – one lane per skill, one bubble per cast. Bubble size is the **total damage of that cast across every player it hit, including the DoT ticks it applied**, and the number inside is how many players it hit, so a 12-player Bioblaster at Onsal mid stands out. Each cast's ticks are drawn as a gold trail of tick marks after it. Each tick is credited to the cast that applied it: the latest earlier cast (within 60 s) that hit the same player and applied that status, or shares the status's name. Ticks that can't be matched get their own "(ticks)" lane, so nothing is dropped. Grey bars show when a skill was on cooldown, green bars show when it was ready but you hadn't used it, and dashed lines mark your deaths and kills. You can zoom to a 30 s / 1 / 2 / 5 minute window and hide small casts. Click a cast to see every player it hit, how much each took, crits, kills, their HP before the hit, your position, and how long the skill had been ready. **Biggest Casts** lists your top casts in the match, and the **Combat** tab lists your best casts across all matches.
 - **Match Detail** – team points breakdown, team points and Battle High graphs, full 72-player scoreboard (grouped by team or alliance, totals, % of team), and your combat log: damage timeline, death and kill recaps, skill → target drill-down, and a filterable full log you can download as CSV.
 
 **Merge export…** loads another FLStats Plus export (for example from another character) into the same view.
@@ -85,7 +85,8 @@ This first version was written without access to a compiler or the game, so chec
 1. It compiles (push to GitHub to let the workflow build it, or build locally).
 2. The combat log fills in during a Frontline match. Check by exporting a match and looking at the Combat Log section.
 3. Crit and direct-hit flags look right. They use Death Recap's bit layout.
-4. The killing blow is attributed to the right hit. It is matched to the last hit on the same player within 5 seconds of the death.
+4. DoT ticks link to the right casts. Tick linking uses the status ID each hit applied (read from the effect's value field) and falls back to matching names and timing.
+5. The killing blow is attributed to the right hit. It is matched to the last hit on the same player within 5 seconds of the death.
 
 ## Credits
 

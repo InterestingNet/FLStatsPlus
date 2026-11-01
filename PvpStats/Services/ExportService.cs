@@ -272,6 +272,7 @@ internal class ExportService {
                         StatusResisted = e.StatusesResisted == 0 ? null : e.StatusesResisted,
                         Kb = e.KillingBlow ? true : null,
                         Seq = e.GlobalSequence == 0 ? null : e.GlobalSequence,
+                        Statuses = e.AppliedStatusIds is { Count: > 0 } ids ? new List<uint>(ids) : null,
                         X = e.SelfX is float x ? MathF.Round(x, 1) : null,
                         Z = e.SelfZ is float z ? MathF.Round(z, 1) : null,
                     };
@@ -308,10 +309,11 @@ internal class ExportService {
             var mine = casts.Where(c => c.Name == s.Name).ToList();
             s.Casts = mine.Count;
             s.MaxTargets = mine.Count > 0 ? mine.Max(c => c.Targets) : 0;
-            s.BestCast = mine.Count > 0 ? mine.Max(c => c.Damage) : 0;
+            s.BestCast = mine.Count > 0 ? mine.Max(c => c.Total) : 0;
+            s.TickDamage = mine.Sum(c => c.TickDamage);
         }
         return new CombatSummaryDto {
-            TopCasts = casts.OrderByDescending(c => c.Damage).Take(15).ToList(),
+            TopCasts = casts.OrderByDescending(c => c.Total).Take(15).ToList(),
             Dealt = dealt,
             Taken = Skills(inRows),
             SelfSkills = Skills(rows.Where(r => r.Dir == "self")),
@@ -329,23 +331,73 @@ internal class ExportService {
     internal static List<CastDto> GroupCasts(IEnumerable<CombatDto> outRows) {
         var casts = new List<CastDto>();
         CastDto? last = null;
-        uint? lastSeq = null;
-        foreach(var r in outRows.Where(r => r.Kind == "action").OrderBy(r => r.T)) {
+        var rows = outRows.ToList();
+        foreach(var r in rows.Where(r => r.Kind == "action").OrderBy(r => r.T)) {
             bool same = last != null && last.Id == r.Id &&
-                (r.Seq != null ? r.Seq == lastSeq : Math.Abs(r.T - last.T) <= 0.5);
+                (r.Seq != null ? r.Seq == last.SeqKey : Math.Abs(r.T - last.T) <= 0.5);
             if(!same) {
-                last = new CastDto { T = r.T, Id = r.Id, Name = r.Name, X = r.X, Z = r.Z };
+                last = new CastDto { T = r.T, Id = r.Id, Name = r.Name, X = r.X, Z = r.Z, SeqKey = r.Seq };
                 casts.Add(last);
-                lastSeq = r.Seq;
             }
-            last!.Hits.Add(new CastHitDto { Other = r.Other, Job = r.OtherJob, Team = r.OtherTeam, Dmg = r.Dmg ?? 0, Heal = r.Heal ?? 0, Crit = r.Crit, Dh = r.Dh, Kb = r.Kb });
+            var hit = last!.Hits.FirstOrDefault(h => h.Other == r.Other);
+            if(hit == null) {
+                hit = new CastHitDto { Other = r.Other, Job = r.OtherJob, Team = r.OtherTeam };
+                last.Hits.Add(hit);
+            }
+            hit.Dmg += r.Dmg ?? 0;
+            hit.Heal += r.Heal ?? 0;
+            if(r.Crit == true) hit.Crit = true;
+            if(r.Dh == true) hit.Dh = true;
+            if(r.Kb == true) hit.Kb = true;
+            foreach(var s in r.Statuses ?? []) last.AppliedStatuses.Add(s);
             last.Damage += r.Dmg ?? 0;
             last.Heal += r.Heal ?? 0;
             if(r.Crit == true) last.Crits++;
             if(r.Kb == true) last.Kills++;
-            last.Targets = last.Hits.Select(h => h.Other).Distinct().Count();
+            last.Targets = last.Hits.Count;
         }
+        AttachTicks(casts, rows.Where(r => r.Kind is "dot" or "hot"));
         return casts;
+    }
+
+    /// <summary>
+    /// Credits each of your DoT/HoT ticks to the cast that applied it: the latest earlier cast (within 60 s) that
+    /// hit the same player and either applied that status id, shares the status's name, or applied some status.
+    /// Ticks with no matching cast are left unattributed (shown as their own lane in the report).
+    /// </summary>
+    internal static void AttachTicks(List<CastDto> casts, IEnumerable<CombatDto> ticks) {
+        foreach(var tick in ticks.OrderBy(t => t.T)) {
+            CastDto? best = null;
+            int bestScore = 0;
+            for(int i = casts.Count - 1; i >= 0; i--) {
+                var c = casts[i];
+                if(c.T > tick.T) continue;
+                if(tick.T - c.T > 60) break;
+                if(!c.Hits.Any(h => h.Other == tick.Other)) continue;
+                int score = c.AppliedStatuses.Contains(tick.Id) ? 3
+                    : string.Equals(c.Name, tick.Name, StringComparison.OrdinalIgnoreCase) ? 2
+                    : c.AppliedStatuses.Count > 0 ? 1 : 0;
+                if(score > bestScore) {
+                    best = c;
+                    bestScore = score;
+                    if(score == 3) break;
+                }
+            }
+            if(best == null) continue;
+            tick.CastT = best.T;
+            best.Ticks++;
+            best.TickDamage += tick.Dmg ?? 0;
+            best.TickHeal += tick.Heal ?? 0;
+            best.LastTickT = tick.T;
+            var hit = best.Hits.First(h => h.Other == tick.Other);
+            hit.Ticks++;
+            hit.TickDmg += tick.Dmg ?? 0;
+            hit.TickHeal += tick.Heal ?? 0;
+            if(tick.Kb == true) {
+                hit.Kb = true;
+                best.Kills++;
+            }
+        }
     }
 
     private readonly Dictionary<uint, ActionMetaDto?> _actionMetaCache = [];
@@ -463,7 +515,16 @@ internal class ExportService {
         public int Kills { get; set; }
         public float? X { get; set; }
         public float? Z { get; set; }
+        /// <summary>DoT/HoT ticks from statuses this cast applied.</summary>
+        public int Ticks { get; set; }
+        public long TickDamage { get; set; }
+        public long TickHeal { get; set; }
+        public double? LastTickT { get; set; }
+        /// <summary>Direct damage + tick damage.</summary>
+        public long Total => Damage + TickDamage;
         public List<CastHitDto> Hits { get; set; } = [];
+        internal uint? SeqKey;
+        internal HashSet<uint> AppliedStatuses = [];
     }
 
     internal class CastHitDto {
@@ -475,6 +536,9 @@ internal class ExportService {
         public bool? Crit { get; set; }
         public bool? Dh { get; set; }
         public bool? Kb { get; set; }
+        public int Ticks { get; set; }
+        public long TickDmg { get; set; }
+        public long TickHeal { get; set; }
     }
 
     internal class TeamDto {
@@ -537,6 +601,9 @@ internal class ExportService {
         public int? StatusResisted { get; set; }
         public bool? Kb { get; set; }
         public uint? Seq { get; set; }
+        public List<uint>? Statuses { get; set; }
+        /// <summary>For DoT/HoT ticks: time of the cast this tick was attributed to.</summary>
+        public double? CastT { get; set; }
         public float? X { get; set; }
         public float? Z { get; set; }
     }
@@ -567,6 +634,8 @@ internal class ExportService {
         public int Casts { get; set; }
         public int MaxTargets { get; set; }
         public long BestCast { get; set; }
+        /// <summary>Damage from DoT ticks credited to this skill's casts.</summary>
+        public long TickDamage { get; set; }
     }
 
     internal class OtherRowDto {

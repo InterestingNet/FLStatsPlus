@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace PvpStats.Types.Match.Timeline;
 
@@ -57,6 +58,8 @@ public class CombatLogEntry {
     /// <summary>Damage type nibble from the effect (1 slashing, 2 piercing, 3 blunt, 5 magic, 6 darkness...).</summary>
     public byte DamageType { get; set; }
     public int StatusesApplied { get; set; }
+    /// <summary>Status ids this hit applied (the effect value of ApplyStatusEffectTarget). Used to link DoT/HoT ticks to the cast.</summary>
+    public List<uint>? AppliedStatusIds { get; set; }
     public int StatusesResisted { get; set; }
 
     /// <summary>Set on the last hit before a death credited to the other party.</summary>
