@@ -7,14 +7,14 @@
 <style>
 :root{
   --bg:#0c0e13;--panel:rgba(21,23,31,.94);--panel2:rgba(33,36,47,.92);--panel3:#14161d;
-  --gold:#c9a95c;--gold2:#e8d39a;--line:#3a3528;--line2:rgba(58,53,40,.55);--text:#e9e4d6;--dim:#9a937f;
+  --gold:#4f8fd9;--gold2:#a9cdf5;--line:#2a3446;--line2:rgba(42,52,70,.55);--text:#e4e9f1;--dim:#8d97a8;--tick:#6fd3e8;
   --Maelstrom:#d0453f;--Adders:#d9b53c;--Flames:#4b8fd6;
-  --dmg:#e2774a;--heal:#6fcf7e;--crit:#f0c54a;--dh:#7fb6f0;--bad:#c85a5a;--good:#5fb87a;
+  --dmg:#e2774a;--heal:#6fcf7e;--crit:#f0c54a;--dh:#b49cf0;--bad:#c85a5a;--good:#5fb87a;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
 html{background:var(--bg)}
-body{background:radial-gradient(ellipse at top,#1b1f2e 0%,var(--bg) 62%) fixed;color:var(--text);font:13.5px/1.45 "Segoe UI",system-ui,sans-serif;min-height:100vh}
+body{background:radial-gradient(ellipse at top,#16223a 0%,var(--bg) 62%) fixed;color:var(--text);font:13.5px/1.45 "Segoe UI",system-ui,sans-serif;min-height:100vh}
 .wrap{max-width:1320px;margin:0 auto;padding:18px 14px 70px}
 h1,h2,h3{font-family:"Trajan Pro","Cinzel",Georgia,serif;letter-spacing:.05em;margin:0;font-weight:600}
 a{color:var(--gold2)}
@@ -23,10 +23,10 @@ a{color:var(--gold2)}
 .top .sub{color:var(--dim);font-size:12px}
 nav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:8px}
 nav button{background:none;border:1px solid var(--line);color:var(--dim);padding:6px 14px;border-radius:3px;cursor:pointer;font:inherit;font-size:12.5px;letter-spacing:.04em}
-nav button.on{color:#1a1609;background:linear-gradient(180deg,var(--gold2),var(--gold));border-color:var(--gold)}
+nav button.on{color:#08111f;background:linear-gradient(180deg,var(--gold2),var(--gold));border-color:var(--gold)}
 nav button:hover:not(.on){border-color:var(--gold);color:var(--text)}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:inset 0 0 0 1px rgba(201,169,92,.10),0 6px 22px rgba(0,0,0,.4);margin-bottom:14px}
-.panel>header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(201,169,92,.13),rgba(201,169,92,0))}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;box-shadow:inset 0 0 0 1px rgba(79,143,217,.10),0 6px 22px rgba(0,0,0,.4);margin-bottom:14px}
+.panel>header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(79,143,217,.13),rgba(79,143,217,0))}
 .panel>header h2{font-size:14px;color:var(--gold2)}
 .panel .body{padding:12px 14px}
 .scroll{overflow:auto;max-height:620px}
@@ -34,7 +34,7 @@ nav button:hover:not(.on){border-color:var(--gold);color:var(--text)}
 .filters label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;display:flex;flex-direction:column;gap:3px}
 input,select,button.btn{background:var(--panel3);color:var(--text);border:1px solid var(--line);border-radius:3px;padding:5px 8px;font:inherit;font-size:12px}
 button.btn{cursor:pointer;color:var(--gold2)}button.btn:hover{border-color:var(--gold)}
-button.btn.on{background:var(--gold);color:#1a1609}
+button.btn.on{background:var(--gold);color:#08111f}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
 .tile{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:8px 11px}
 .tile .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
@@ -45,9 +45,9 @@ th{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--di
 .scroll th{position:sticky;top:0;z-index:1}
 th.l,td.l{text-align:left}
 td{padding:5px 7px;text-align:right;border-bottom:1px solid var(--line2);white-space:nowrap}
-tr.click{cursor:pointer}tr.click:hover td{background:rgba(201,169,92,.07)}
-tr.sel td{background:rgba(201,169,92,.15)}
-tr.you td{box-shadow:inset 0 0 0 9999px rgba(232,211,154,.10);font-weight:600}
+tr.click{cursor:pointer}tr.click:hover td{background:rgba(79,143,217,.07)}
+tr.sel td{background:rgba(79,143,217,.15)}
+tr.you td{box-shadow:inset 0 0 0 9999px rgba(169,205,245,.10);font-weight:600}
 tr.teamrow td{font-weight:600;border-top:1px solid var(--line)}
 .bar{position:relative;height:6px;background:rgba(255,255,255,.06);border-radius:3px;min-width:70px;display:inline-block;width:90px;vertical-align:middle;margin-left:6px}
 .bar i{position:absolute;inset:0 auto 0 0;border-radius:3px}
@@ -567,7 +567,7 @@ function viewMatch(v){
   else if($('#gPts'))$('#gPts').innerHTML='<div class="empty">No timeline recorded.</div>';
   if(m.battleHigh&&m.battleHigh.length){const ymax=Math.max(110,...m.battleHigh.map(p=>p[1]));
     $('#gBH').innerHTML=lineChart([{name:'BH',color:'var(--gold2)',pts:m.battleHigh,step:true}],{xmax:m.durationSec,ymax,yfmt:v=>Math.round(v),
-      bands:[20,40,60,80,100].map((b,i)=>({from:b,to:i<4?b+20:ymax,color:`rgba(201,169,92,${.04+i*.025})`,label:'BH '+["I","II","III","IV","V"][i]})),
+      bands:[20,40,60,80,100].map((b,i)=>({from:b,to:i<4?b+20:ymax,color:`rgba(79,143,217,${.04+i*.025})`,label:'BH '+["I","II","III","IV","V"][i]})),
       markers:deaths.map(d=>({x:d.t,tip:`Death at ${mmss(d.t)}`}))});
   } else if($('#gBH'))$('#gBH').innerHTML='<div class="empty">No Battle High data.</div>';
 
@@ -674,17 +674,17 @@ function drawAbilityTimeline(m,casts,deaths){
   deaths.filter(d=>d.t>=w0&&d.t<=w1).forEach(d=>g+=`<line x1="${X(d.t)}" x2="${X(d.t)}" y1="${TOP}" y2="${H-18}" stroke="${d.dir==='in'?'var(--bad)':'var(--good)'}" stroke-dasharray="3 3" opacity=".7"/><text x="${X(d.t)}" y="${TOP-8}" text-anchor="middle" style="font-size:12px;fill:${d.dir==='in'?'var(--bad)':'var(--good)'}" data-tip="${d.dir==='in'?'Killed by':'You killed'} ${esc(d.other)} — ${esc(d.name)} at ${mmss(d.t)}">${d.dir==='in'?'☠':'⚔'}</text>`);
   // tick trails: a line from the cast to its last tick, a mark per tick
   if(MD.atTicks)vis.filter(c=>c.ticks&&c.lastTickT>=w0&&c.t<=w1).forEach(c=>{const y=TOP+lanes.indexOf(c.name)*LH+LH/2-2,sel=MD.cast===c;
-    g+=`<line x1="${X(Math.max(c.t,w0))}" x2="${X(Math.min(c.lastTickT,w1))}" y1="${y}" y2="${y}" stroke="var(--crit)" stroke-opacity="${sel?.9:.35}" stroke-width="${sel?2:1.2}"/>`;
+    g+=`<line x1="${X(Math.max(c.t,w0))}" x2="${X(Math.min(c.lastTickT,w1))}" y1="${y}" y2="${y}" stroke="var(--tick)" stroke-opacity="${sel?.9:.35}" stroke-width="${sel?2:1.2}"/>`;
     const byT={};c.tickList.forEach(t=>{const k=t.t.toFixed(1);byT[k]=(byT[k]||0)+(t.dmg||t.heal||0)});
-    Object.entries(byT).forEach(([t,v])=>{t=+t;if(t<w0||t>w1)return;g+=`<line x1="${X(t)}" x2="${X(t)}" y1="${y-5}" y2="${y+5}" stroke="var(--crit)" stroke-opacity="${sel?1:.6}" stroke-width="1.4" data-tip="${esc(c.name)} tick at ${mmss(t)}: ${fmt(v)}"/>`})});
+    Object.entries(byT).forEach(([t,v])=>{t=+t;if(t<w0||t>w1)return;g+=`<line x1="${X(t)}" x2="${X(t)}" y1="${y-5}" y2="${y+5}" stroke="var(--tick)" stroke-opacity="${sel?1:.6}" stroke-width="1.4" data-tip="${esc(c.name)} tick at ${mmss(t)}: ${fmt(v)}"/>`})});
   // ticks that could not be matched to a cast get their own lane
   if(MD.atTicks){const byLT={};unl.forEach(t=>{const k=tl(t.name)+'|'+t.t.toFixed(1);(byLT[k]??={n:tl(t.name),t:t.t,v:0,c:0,tg:new Set()});byLT[k].v+=t.dmg||t.heal||0;byLT[k].c++;byLT[k].tg.add(t.other)});
     Object.values(byLT).filter(x=>x.t>=w0&&x.t<=w1).forEach(x=>{const y=TOP+lanes.indexOf(x.n)*LH+LH/2-2;
-      g+=`<rect x="${X(x.t)-1.5}" y="${y-6}" width="3" height="12" fill="var(--crit)" opacity=".75" data-tip="${esc(x.n)} at ${mmss(x.t)}: ${fmt(x.v)} on ${x.tg.size} player${x.tg.size>1?'s':''} (no matching cast found)"/>`})}
+      g+=`<rect x="${X(x.t)-1.5}" y="${y-6}" width="3" height="12" fill="var(--tick)" opacity=".75" data-tip="${esc(x.n)} at ${mmss(x.t)}: ${fmt(x.v)} on ${x.tg.size} player${x.tg.size>1?'s':''} (no matching cast found)"/>`})}
   vis.filter(c=>c.t>=w0&&c.t<=w1).sort((a,b)=>b.total-a.total).forEach(c=>{const y=TOP+lanes.indexOf(c.name)*LH+LH/2-2,r=4+11*Math.sqrt(c.total/maxD),sel=MD.cast===c;
     g+=`<g class="cast" data-ci="${casts.indexOf(c)}" style="cursor:pointer" data-tip="<b>${esc(c.name)}</b> at ${mmss(c.t)}<br>${c.targets} player${c.targets>1?'s':''} hit · <b>${fmt(c.total)}</b> total${c.ticks?`<br>direct ${fmt(c.damage)} + ${c.ticks} tick${c.ticks>1?'s':''} ${fmt(c.tickDamage)} (until ${mmss(c.lastTickT)})`:''}${c.targets>1?`<br>avg ${fmt(c.total/c.targets)} per player`:''}${c.crits?`<br>${c.crits} crit${c.crits>1?'s':''}`:''}${c.kills?`<br>⚔ ${c.kills} kill${c.kills>1?'s':''}`:''}">
       <circle cx="${X(c.t)}" cy="${y}" r="${r}" fill="var(--dmg)" fill-opacity="${c.targets>1?.85:.55}" stroke="${sel?'#fff':c.kills?'var(--gold2)':'rgba(0,0,0,.4)'}" stroke-width="${sel||c.kills?2:1}"/>
-      ${c.targets>1&&r>=8?`<text x="${X(c.t)}" y="${y+3.5}" text-anchor="middle" style="fill:#1a1209;font-size:10px;font-weight:700">${c.targets}</text>`:''}</g>`});
+      ${c.targets>1&&r>=8?`<text x="${X(c.t)}" y="${y+3.5}" text-anchor="middle" style="fill:#08111f;font-size:10px;font-weight:700">${c.targets}</text>`:''}</g>`});
   host.innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>${lanes.length?'':'<div class="empty">No casts recorded.</div>'}`;
   host.querySelectorAll('.cast').forEach(n=>n.onclick=()=>{MD.cast=casts[+n.dataset.ci];drawAbilityTimeline(m,casts,deaths);showCast(m,MD.cast,casts)});
   bindTips(host);
@@ -738,7 +738,7 @@ function drawCombat(m){
      <button class="btn ${MD.atTicks?'on':''}" id="atTicks" title="Show DoT/HoT ticks after each cast">Ticks</button>
      <button class="btn ${MD.atCd?'on':''}" id="atCd" title="Show when each skill was on cooldown (grey) and ready but not used (green)">Cooldowns</button></div></header>
     <div class="body"><div id="atl"></div>
-     <div class="legend"><span><i class="dot" style="background:var(--dmg)"></i>one cast — size = total damage incl. ticks, number = players hit</span><span style="color:var(--crit)">┃ DoT/HoT ticks from that cast</span><span><i class="dot" style="background:var(--gold2)"></i>cast scored a kill</span>
+     <div class="legend"><span><i class="dot" style="background:var(--dmg)"></i>one cast — size = total damage incl. ticks, number = players hit</span><span style="color:var(--tick)">┃ DoT/HoT ticks from that cast</span><span><i class="dot" style="background:var(--gold2)"></i>cast scored a kill</span>
       <span><i class="dot" style="background:rgba(160,160,160,.6)"></i>on cooldown</span><span><i class="dot" style="background:rgba(95,184,122,.6)"></i>ready but not used</span><span class="bad">┊ your deaths</span></div>
      <div id="castDetail"></div></div></section>`:''}
   <section class="panel"><header><h2>Biggest Casts</h2><span class="dim">every target a single cast hit, added together · click for the breakdown</span></header><div class="body" id="topCasts"></div></section>
