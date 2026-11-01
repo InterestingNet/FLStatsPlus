@@ -23,12 +23,18 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
     //protected FrontlineMatch? CurrentMatch { get; set; }
 
     private DateTime _lastUpdate;
+    private DateTime _lastPlayerScan = DateTime.MinValue;
+    //Battle High only changes on kills/deaths; scanning 72 players' statuses every frame is wasteful
+    private static readonly TimeSpan PlayerScanInterval = TimeSpan.FromMilliseconds(500);
+
+    internal string CombatLogOverhead => _combatLogger?.OverheadSummary ?? "Combat log unavailable.";
     private DateTime _lastPrint = DateTime.MinValue;
 
     private FrontlineMatchTimeline? _currentMatchTimeline;
     private readonly FrontlineCombatLogger? _combatLogger;
 
     private Dictionary<PlayerAlias, int> _maxObservedBattleHigh = [];
+    private HashSet<uint> _seenPlayers = [];
 
     private static readonly Dictionary<int, int> BattleHighStatuses = new() {
         { 1, 2131 },
@@ -108,6 +114,7 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
                 }
             }
             _maxObservedBattleHigh = [];
+            _seenPlayers = [];
 
             _currentMatchTimeline = null;
             if(Plugin.Configuration.EnableTimelineFL ?? true) {
@@ -150,6 +157,8 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
                 if(ProcessMatchResults(resultsPacket)) {
                     await Plugin.FLCache.UpdateMatch(CurrentMatch!);
                     if(_currentMatchTimeline != null) {
+                        //compress the combat log once, off the game thread
+                        _currentMatchTimeline.PackCombatLog();
                         await Plugin.Storage.UpdateFLTimeline(_currentMatchTimeline);
                     }
 
@@ -303,26 +312,27 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
 #endif
 
         var objectTable = Plugin.ObjectTable;
-        for(int i = 0; i < objectTable.Length; i++) {
+        bool scanPlayers = now - _lastPlayerScan >= PlayerScanInterval;
+        if(scanPlayers) _lastPlayerScan = now;
+        for(int i = 0; scanPlayers && i < objectTable.Length; i++) {
             var obj = objectTable[i];
             if(obj == null || obj.ObjectKind != ObjectKind.Pc)
                 continue;
 
             try {
                 var pc = (IPlayerCharacter)obj;
-                var statusList = pc.StatusList;
                 int battleHigh = 0;
-
-                foreach(var kvp in BattleHighStatuses) {
-                    foreach(var status in statusList) {
-                        if(status.StatusId == kvp.Value) {
-                            battleHigh = kvp.Key;
-                            goto FoundBattleHigh;
-                        }
+                //single pass: Battle High I-V are status ids 2131-2135
+                foreach(var status in pc.StatusList) {
+                    var id = status.StatusId;
+                    if(id >= 2131 && id <= 2135) {
+                        battleHigh = (int)(id - 2130);
+                        break;
                     }
                 }
-
-            FoundBattleHigh:
+                if(battleHigh == 0 && !_seenPlayers.Add(pc.EntityId)) {
+                    continue; //already recorded this player at 0; nothing to update
+                }
                 var aliasKey = (PlayerAlias)$"{pc.Name} {pc.HomeWorld.Value.Name}";
                 if(_maxObservedBattleHigh.TryGetValue(aliasKey, out int existing)) {
                     if(battleHigh > existing)

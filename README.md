@@ -48,6 +48,17 @@ A history report embeds the raw combat log when it has 25 matches or fewer. Abov
 
 The log records events **involving you**. The game only sends your client events for players near you, so you cannot see fights elsewhere on the map. The end-of-match scoreboard still covers all 72 players. Logged damage can be higher than the scoreboard's "damage to PCs", because the log also counts hits on NPCs and objects.
 
+## Performance
+
+The plugin is built to stay out of the game's way:
+
+- **The hooks bail out almost instantly on events that aren't yours.** The combat-log hooks see every hit, tick and status event from all ~72 players and every NPC. Each one first checks whether you are involved, using only a few integer comparisons on game memory: your entity ID, your pets' IDs, and the target IDs in the packet. Anything else returns right away with no allocations or lookups. Names, world lookups and skill data are only fetched for your own events, and they are cached for the match.
+- **No disk writes during a match.** The log is kept in memory, then compressed once on a background thread when the match ends. That's about 50 KB per match instead of roughly 1.3 MB as a raw database document.
+- **Less per-frame work than PvpStats.** PvpStats scanned every player's status list every frame to track Battle High. Here that scan runs twice a second in a single pass, and players already recorded at Battle High 0 are skipped.
+- **Exports never run on the game thread.** Building HTML, JSON or CSV happens in the background, and auto-export is off by default. The HTML report opens in your browser, not in the game.
+- **Built-in overhead meter.** *Settings → Enhanced Tracking Features* shows, after each match, how many game events the hooks saw, how many were recorded, and the total and per-frame time spent in the hooks. The same line goes to `/xllog`.
+- **Can be turned off.** Unticking *Frontline Personal Combat Log* stops all recording. The hooks stay installed but return immediately.
+
 ## IPC (for other plugins)
 
 | Gate | Type | Notes |
@@ -86,7 +97,8 @@ This first version was written without access to a compiler or the game, so chec
 2. The combat log fills in during a Frontline match. Check by exporting a match and looking at the Combat Log section.
 3. Crit and direct-hit flags look right. They use Death Recap's bit layout.
 4. DoT ticks link to the right casts. Tick linking uses the status ID each hit applied (read from the effect's value field) and falls back to matching names and timing.
-5. The killing blow is attributed to the right hit. It is matched to the last hit on the same player within 5 seconds of the death.
+5. The killing blow is attributed to the right hit.
+6. The overhead meter in settings shows small numbers after a match. The expected range is well under 0.05 ms per frame. It is matched to the last hit on the same player within 5 seconds of the death.
 
 ## Credits
 

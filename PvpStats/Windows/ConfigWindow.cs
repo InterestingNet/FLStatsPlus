@@ -661,6 +661,11 @@ internal class ConfigWindow : Window {
                 _plugin.Configuration.Save();
             });
         }
+        if(enableCombatLogFL && _plugin.FLMatchManager != null) {
+            ImGui.Indent();
+            ImGui.TextDisabled(_plugin.FLMatchManager.CombatLogOverhead);
+            ImGui.Unindent();
+        }
         bool autoExportFL = _plugin.Configuration.AutoExportFLMatchHtml ?? false;
         if(ImGui.Checkbox("Auto-export Frontline match report (HTML) after each match", ref autoExportFL)) {
             _plugin.Configuration.AutoExportFLMatchHtml = autoExportFL;

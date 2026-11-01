@@ -8,7 +8,9 @@ using PvpStats.Types.ClientStruct.Action;
 using PvpStats.Types.Match.Timeline;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Numerics;
+using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 using GameObjectId = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObjectId;
 
 namespace PvpStats.Managers.Game;
@@ -18,6 +20,12 @@ namespace PvpStats.Managers.Game;
 /// actions (with crit / direct hit / block / parry flags), DoT and HoT ticks, and deaths.
 /// Only events where the local player (or their pet) is the source or the target are kept.
 /// Hooks are the same functions PvpStats' Crystalline Conflict tracker uses.
+///
+/// Performance: these hooks fire for every hit/tick/status event of every player and NPC in range.
+/// Each detour first decides relevance with plain integer compares on raw game memory (your entity id,
+/// your pets' ids, the target ids in the packet) and returns immediately for everything else, so the
+/// cost of an event that isn't yours is a few nanoseconds and no allocations. Object lookups, name
+/// strings and Excel lookups only happen for events that involve you, and are cached per match.
 /// </summary>
 internal unsafe class FrontlineCombatLogger : IDisposable {
 
@@ -39,6 +47,18 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
 
     public bool IsActive => _sink != null;
 
+    // cached per match (game thread only)
+    private uint _localId;
+    private readonly HashSet<uint> _petIds = [];
+    private readonly Dictionary<uint, string> _nameCache = [];
+
+    // overhead meter
+    private long _hookTicks, _hookCalls, _recorded;
+    private int _peakCount;
+    private DateTime _startedAt;
+    /// <summary>Human-readable overhead summary for the current/last match.</summary>
+    public string OverheadSummary { get; private set; } = "No Frontline match recorded yet this session.";
+
     public FrontlineCombatLogger(Plugin plugin) {
         _plugin = plugin;
         _plugin.InteropProvider.InitializeFromAttributes(this);
@@ -58,6 +78,11 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
     /// <summary>Begin writing entries into <paramref name="sink"/>.</summary>
     public void Start(List<CombatLogEntry> sink) {
         lock(_lock) {
+            _localId = 0; // resolved lazily on the game thread
+            _petIds.Clear();
+            _nameCache.Clear();
+            _hookTicks = _hookCalls = _recorded = 0;
+            _startedAt = DateTime.UtcNow;
             _sink = sink;
         }
     }
@@ -65,22 +90,43 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
     /// <summary>Stop recording. Call on the game thread before the match is saved.</summary>
     public void Stop() {
         lock(_lock) {
+            if(_sink != null) {
+                _peakCount = _sink.Count;
+                var ms = _hookTicks * 1000.0 / Stopwatch.Frequency;
+                var minutes = Math.Max((DateTime.UtcNow - _startedAt).TotalMinutes, 1 / 60.0);
+                OverheadSummary = $"Last match: {_recorded:N0} events recorded from {_hookCalls:N0} game events seen; " +
+                    $"total time in combat-log hooks {ms:N1} ms over {minutes:N1} min (≈{ms / (minutes * 60 * 60):N3} ms per frame at 60 fps).";
+                Plugin.Log2.Information($"[FLStatsPlus] combat log overhead: {OverheadSummary}");
+            }
             _sink = null;
         }
     }
 
+    /// <summary>Your entity id; resolved once per match on the game thread.</summary>
+    private uint ResolveLocalId() {
+        if(_localId == 0) {
+            _localId = _plugin.ObjectTable.LocalPlayer?.EntityId ?? 0;
+        }
+        return _localId;
+    }
+
     private void Add(CombatLogEntry entry) {
+        SetPosition(entry);
+        lock(_lock) {
+            _sink?.Add(entry);
+            _recorded++;
+        }
+    }
+
+    private void SetPosition(CombatLogEntry entry) {
         var me = _plugin.ObjectTable.LocalPlayer;
         if(me != null) {
             entry.SelfX = me.Position.X;
             entry.SelfZ = me.Position.Z;
         }
-        lock(_lock) {
-            _sink?.Add(entry);
-        }
     }
 
-    private uint LocalId => _plugin.ObjectTable.LocalPlayer?.EntityId ?? 0;
+    private uint LocalId => _localId;
 
     /// <summary>Returns true if the object is the local player or one of their pets.</summary>
     private bool IsSelf(IGameObject? obj, out bool isPet) {
@@ -95,11 +141,12 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
         return false;
     }
 
-    private static string Describe(IGameObject? obj) {
-        if(obj is IPlayerCharacter pc) {
-            return $"{pc.Name} {pc.HomeWorld.Value.Name}";
-        }
-        return obj?.Name.TextValue ?? "Unknown";
+    private string Describe(IGameObject? obj) {
+        if(obj == null) return "Unknown";
+        if(_nameCache.TryGetValue(obj.EntityId, out var name)) return name;
+        name = obj is IPlayerCharacter pc ? $"{pc.Name} {pc.HomeWorld.Value.Name}" : obj.Name.TextValue;
+        _nameCache[obj.EntityId] = name;
+        return name;
     }
 
     private (string Name, uint Icon) ActionInfo(uint id) {
@@ -130,7 +177,7 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
         return obj;
     }
 
-    private static void FillOther(CombatLogEntry e, IGameObject? other) {
+    private void FillOther(CombatLogEntry e, IGameObject? other) {
         e.Other = Describe(other);
         e.OtherIsPlayer = other is IPlayerCharacter;
         if(other is IBattleChara bc) {
@@ -142,19 +189,36 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
 
     private void ActionEffectDetour(uint casterEntityId, Character* casterPtr, Vector3* targetPos,
         ActionEffectHandler.Header* header, ActionEffectHandler.TargetEffects* effects, GameObjectId* targetIds) {
+        long t0 = 0;
         try {
             if(_sink == null) return;
-            var caster = _plugin.ObjectTable.SearchByEntityId(casterEntityId);
-            bool casterIsSelf = IsSelf(caster, out var fromPet);
+            t0 = Stopwatch.GetTimestamp();
+            _hookCalls++;
+            // ── fast path: integer compares only ──
+            var local = ResolveLocalId();
+            if(local == 0) return;
+            uint ownerId = casterPtr != null ? ((CSGameObject*)casterPtr)->OwnerId : 0;
+            bool fromPet = casterEntityId != local && (ownerId == local || _petIds.Contains(casterEntityId));
+            bool casterIsSelf = casterEntityId == local || fromPet;
+            if(fromPet) _petIds.Add(casterEntityId);
+            if(!casterIsSelf) {
+                bool hitsMe = false;
+                for(var i = 0; i < header->NumTargets; i++) {
+                    if((uint)(targetIds[i] & uint.MaxValue) == local) { hitsMe = true; break; }
+                }
+                if(!hitsMe) return;
+            }
+            // ── slow path: only for events that involve you ──
+            var caster = casterPtr != null ? _plugin.ObjectTable.CreateObjectReference((nint)casterPtr) : _plugin.ObjectTable.SearchByEntityId(casterEntityId);
             var now = DateTime.UtcNow;
             uint actionId = header->SpellId;
             var info = ActionInfo(actionId);
 
             for(var i = 0; i < header->NumTargets; i++) {
                 var targetId = (uint)(targetIds[i] & uint.MaxValue);
-                var target = _plugin.ObjectTable.SearchByEntityId(targetId);
-                bool targetIsSelf = target != null && target.EntityId == LocalId;
+                bool targetIsSelf = targetId == local;
                 if(!casterIsSelf && !targetIsSelf) continue;
+                var target = targetIsSelf ? _plugin.ObjectTable.LocalPlayer : _plugin.ObjectTable.SearchByEntityId(targetId);
 
                 var entry = new CombatLogEntry {
                     Timestamp = now,
@@ -232,6 +296,7 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
         } catch(Exception ex) {
             Plugin.Log2.Error(ex, "FL combat log: action effect");
         } finally {
+            if(t0 != 0) _hookTicks += Stopwatch.GetTimestamp() - t0;
             _actionEffectHook!.Original(casterEntityId, casterPtr, targetPos, header, effects, targetIds);
         }
     }
@@ -242,14 +307,23 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
     };
 
     private void HoTDoTDetour(IntPtr targetStatusManager, IntPtr targetObj, uint statusId, uint kind, int amount, uint sourceEntityId, int beneficial) {
+        long t0 = 0;
         try {
             // kind: 3 = damage, 4 = heal, 11 = mp
-            if(_sink == null || statusId == 0 || (kind != 3 && kind != 4)) return;
-            var source = _plugin.ObjectTable.SearchByEntityId(sourceEntityId);
-            var target = _plugin.ObjectTable.CreateObjectReference(targetObj);
-            bool sourceIsSelf = IsSelf(source, out var fromPet);
-            bool targetIsSelf = target != null && target.EntityId == LocalId;
+            if(_sink == null) return;
+            t0 = Stopwatch.GetTimestamp();
+            _hookCalls++;
+            if(statusId == 0 || (kind != 3 && kind != 4)) return;
+            // ── fast path ──
+            var local = ResolveLocalId();
+            if(local == 0) return;
+            bool fromPet = sourceEntityId != local && _petIds.Contains(sourceEntityId);
+            bool sourceIsSelf = sourceEntityId == local || fromPet;
+            bool targetIsSelf = targetObj != IntPtr.Zero && ((CSGameObject*)targetObj)->EntityId == local;
             if(!sourceIsSelf && !targetIsSelf) return;
+            // ── slow path ──
+            var target = _plugin.ObjectTable.CreateObjectReference(targetObj);
+            var source = sourceIsSelf && !fromPet ? _plugin.ObjectTable.LocalPlayer : _plugin.ObjectTable.SearchByEntityId(sourceEntityId);
 
             var info = StatusInfo(statusId);
             var entry = new CombatLogEntry {
@@ -268,17 +342,25 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
         } catch(Exception ex) {
             Plugin.Log2.Error(ex, "FL combat log: hot/dot");
         } finally {
+            if(t0 != 0) _hookTicks += Stopwatch.GetTimestamp() - t0;
             _hotDotHook.Original(targetStatusManager, targetObj, statusId, kind, amount, sourceEntityId, beneficial);
         }
     }
 
     private void ActorControlDetour(uint entityId, uint type, uint p1, uint p2, uint p3, uint p4, uint p5, uint p6, uint p7, uint p8, ulong targetEntityId, byte flag) {
+        long t0 = 0;
         try {
-            if(_sink == null || type != (uint)ActorControlCategory.Death) return;
+            if(_sink == null) return;
+            t0 = Stopwatch.GetTimestamp();
+            _hookCalls++;
+            if(type != (uint)ActorControlCategory.Death) return;
             // entityId = victim, p2 = killer
+            var local = ResolveLocalId();
+            if(local == 0) return;
+            if(entityId != local && p2 != local && !_petIds.Contains(p2)) return;
             var victim = _plugin.ObjectTable.SearchByEntityId(entityId);
             var killer = _plugin.ObjectTable.SearchByEntityId(p2);
-            bool victimIsSelf = victim != null && victim.EntityId == LocalId;
+            bool victimIsSelf = entityId == local;
             bool killerIsSelf = IsSelf(killer, out var fromPet);
             if(!victimIsSelf && !killerIsSelf) return;
             if(victimIsSelf && killerIsSelf) return;
@@ -306,16 +388,14 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                         break;
                     }
                 }
-                var me = _plugin.ObjectTable.LocalPlayer;
-                if(me != null) {
-                    entry.SelfX = me.Position.X;
-                    entry.SelfZ = me.Position.Z;
-                }
+                SetPosition(entry);
                 _sink.Add(entry);
+                _recorded++;
             }
         } catch(Exception ex) {
             Plugin.Log2.Error(ex, "FL combat log: actor control");
         } finally {
+            if(t0 != 0) _hookTicks += Stopwatch.GetTimestamp() - t0;
             _actorControlHook.Original(entityId, type, p1, p2, p3, p4, p5, p6, p7, p8, targetEntityId, flag);
         }
     }

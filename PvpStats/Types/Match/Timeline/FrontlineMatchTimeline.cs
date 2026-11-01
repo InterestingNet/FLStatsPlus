@@ -1,3 +1,4 @@
+using LiteDB;
 using PvpStats.Types.Event.Frontline;
 using System;
 using System.Collections.Generic;
@@ -7,8 +8,27 @@ internal class FrontlineMatchTimeline : PvpMatchTimeline {
 
     public Dictionary<FrontlineTeamName, List<TeamPointsEvent>>? TeamPoints { get; set; }
     public List<BattleHighLevelEvent>? SelfBattleHigh { get; set; }
-    /// <summary>FLStatsPlus: every hit you dealt / took, DoT/HoT ticks and kills/deaths.</summary>
+    /// <summary>FLStatsPlus: every hit you dealt / took, DoT/HoT ticks and kills/deaths. In memory only; stored packed.</summary>
+    [BsonIgnore]
     public List<CombatLogEntry>? SelfCombatLog { get; set; }
+
+    /// <summary>FLStatsPlus: <see cref="SelfCombatLog"/> as gzip-compressed JSON (see <see cref="CombatLogCodec"/>).</summary>
+    public byte[]? SelfCombatLogPacked { get; set; }
+
+    /// <summary>Call before saving the finished match.</summary>
+    public void PackCombatLog() {
+        if(SelfCombatLog != null) {
+            SelfCombatLogPacked = CombatLogCodec.Pack(SelfCombatLog);
+        }
+    }
+
+    /// <summary>The combat log, unpacking it on first use after loading from the database.</summary>
+    public List<CombatLogEntry>? GetCombatLog() {
+        if(SelfCombatLog == null && SelfCombatLogPacked != null) {
+            SelfCombatLog = CombatLogCodec.Unpack(SelfCombatLogPacked);
+        }
+        return SelfCombatLog;
+    }
     public FrontlineMatchTimeline() : base() {
 
     }

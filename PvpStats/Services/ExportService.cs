@@ -239,9 +239,10 @@ internal class ExportService {
             if(tl.SelfBattleHigh != null) {
                 dto.BattleHigh = tl.SelfBattleHigh.Select(e => new[] { Rel(e.Timestamp), e.Count }).ToList();
             }
-            if(tl.SelfCombatLog != null) {
+            var combatLog = tl.GetCombatLog();
+            if(combatLog != null) {
                 List<CombatLogEntry> log;
-                lock(tl.SelfCombatLog) { log = tl.SelfCombatLog.ToList(); }
+                lock(combatLog) { log = combatLog.ToList(); }
                 var rows = log.Select(e => {
                     lookup.TryGetValue(e.Other, out var other);
                     return new CombatDto {
