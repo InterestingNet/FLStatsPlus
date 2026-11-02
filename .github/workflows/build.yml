@@ -1,13 +1,24 @@
 name: Build
 
+# Every push builds the plugin and uploads it as an artifact (Actions tab).
+# Pushing a version tag (e.g. v0.1.0) also publishes a GitHub Release with latest.zip and
+# updates repo.json, which is the Dalamud custom-repository file people add in /xlsettings.
+
 on:
   push:
+    branches: [main, master]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -18,15 +29,68 @@ jobs:
       - name: Download Dalamud dev assemblies
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile latest.zip
-          Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
+          Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile dalamud.zip
+          Expand-Archive -Force dalamud.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
+
+      - name: Work out version
+        id: ver
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart('v') } else { $v = "0.0.0.${{ github.run_number }}" }
+          $parts = @($v.Split('.'))
+          while ($parts.Count -lt 4) { $parts += '0' }
+          $v = ($parts[0..3] -join '.')
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Building version $v"
 
       - name: Build
-        run: dotnet build FLStatsPlus.sln -c Release
+        run: dotnet build FLStatsPlus.sln -c Release -p:Version=${{ steps.ver.outputs.version }}
 
-      - name: Upload plugin zip
-        uses: actions/upload-artifact@v4
+      - name: Collect plugin zip
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Path PvpStats/bin -Recurse -Filter latest.zip | Select-Object -First 1
+          if (-not $zip) { throw "latest.zip not found - check the build output" }
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item $zip.FullName out/latest.zip
+          Write-Host "Packaged $($zip.FullName)"
+
+      - uses: actions/upload-artifact@v4
         with:
           name: FLStatsPlus
-          path: PvpStats/bin/**/FLStatsPlus/latest.zip
+          path: out/latest.zip
           if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: FLStatsPlus
+          path: out
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" out/latest.zip \
+            --title "FLStats Plus ${{ github.ref_name }}" --generate-notes
+
+      - name: Update repo.json (Dalamud custom repository)
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 tools/make_repo_json.py PvpStats/FLStatsPlus.json repo.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add repo.json
+          git commit -m "repo.json: ${TAG}" || echo "repo.json unchanged"
+          git push
