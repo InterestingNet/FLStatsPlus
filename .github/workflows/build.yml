@@ -1,8 +1,10 @@
 name: Build
 
 # Every push builds the plugin and uploads it as an artifact (Actions tab).
-# Pushing a version tag (e.g. v0.1.0) also publishes a GitHub Release with latest.zip and
-# updates repo.json, which is the Dalamud custom-repository file people add in /xlsettings.
+# To publish a version: Actions -> Build -> "Run workflow", enter a version (e.g. 0.1.0).
+# That builds it, creates the GitHub Release + tag v<version> with latest.zip, and updates
+# repo.json (the Dalamud custom-repository file people add in /xlsettings).
+# Pushing a v* tag does the same.
 
 on:
   push:
@@ -10,6 +12,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Version to publish as a release, e.g. 0.1.0 (leave empty to just build)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -36,7 +43,10 @@ jobs:
         id: ver
         shell: pwsh
         run: |
-          if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart('v') } else { $v = "0.0.0.${{ github.run_number }}" }
+          $rel = "${{ inputs.release_version }}"
+          if ($rel) { $v = $rel.TrimStart('v') }
+          elseif ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}".TrimStart('v') }
+          else { $v = "0.0.0.${{ github.run_number }}" }
           $parts = @($v.Split('.'))
           while ($parts.Count -lt 4) { $parts += '0' }
           $v = ($parts[0..3] -join '.')
@@ -62,7 +72,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' || inputs.release_version != ''
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -75,17 +85,23 @@ jobs:
           name: FLStatsPlus
           path: out
 
+      - name: Work out tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.release_version }}" ]; then echo "tag=v${{ inputs.release_version }}" | sed 's/vv/v/' >> "$GITHUB_OUTPUT"
+          else echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"; fi
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" out/latest.zip \
-            --title "FLStats Plus ${{ github.ref_name }}" --generate-notes
+          gh release create "${{ steps.tag.outputs.tag }}" out/latest.zip --target "${{ github.sha }}" \
+            --title "FLStats Plus ${{ steps.tag.outputs.tag }}" --generate-notes
 
       - name: Update repo.json (Dalamud custom repository)
         env:
           VERSION: ${{ needs.build.outputs.version }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ steps.tag.outputs.tag }}
           REPO: ${{ github.repository }}
         run: |
           python3 tools/make_repo_json.py PvpStats/FLStatsPlus.json repo.json

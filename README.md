@@ -19,14 +19,9 @@ The custom-repository link only works while the GitHub repository is **public**.
 
 ## Releasing a new version (maintainer)
 
-Every push is built by GitHub Actions; the plugin zip appears under **Actions → Build → Artifacts**. To publish a version players get automatically:
+Every push is built by GitHub Actions; the plugin zip appears under **Actions → Build → Artifacts**. To publish a version players get automatically, open **Actions → Build → Run workflow**, enter a version such as `0.1.0`, and click **Run workflow**. Pushing a `v0.1.0` tag does the same.
 
-```
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-The workflow then builds that version, creates a GitHub Release with `latest.zip`, and updates `repo.json` on the default branch. Dalamud sees the new version number and offers the update.
+The workflow then builds that version, creates the `v0.1.0` tag and a GitHub Release with `latest.zip`, and updates `repo.json` on the default branch. Dalamud sees the new version number and offers the update.
 
 ## Commands
 
