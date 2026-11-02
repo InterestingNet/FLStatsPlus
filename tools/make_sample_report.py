@@ -280,7 +280,8 @@ def main():
     now = datetime(2026, 10, 31, 22, 0, tzinfo=timezone.utc)
     starts = sorted(now - timedelta(hours=random.uniform(0, 24 * 45)) for _ in range(n))
     matches = [make_match(i, s, with_combat=i >= n - 6, demo=i == n - 1) for i, s in enumerate(starts)]
-    report = dict(schema=1, plugin="FLStats Plus 0.1.0.0 (SAMPLE DATA)", generated=iso(now), mode="history", matches=matches)
+    report = dict(schema=1, plugin="FLStats Plus 0.1.0.0 (SAMPLE DATA)", generated=iso(now), mode="history", matches=matches,
+                  open=dict(match="latest", castT=303.0))  # open on the Onsal match, 12-player Bioblaster selected
     data = json.dumps(report, separators=(",", ":")).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     html = open(tpl, encoding="utf-8").read()
     assert "/*__FLSTATS_DATA__*/null" in html

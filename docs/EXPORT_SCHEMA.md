@@ -8,7 +8,8 @@ This one format is used by the HTML report (embedded in `<script id="report-data
   "plugin": "FLStats Plus 0.1.0.0",
   "generated": "2026-11-01T10:00:00Z",
   "mode": "match" | "history",
-  "matches": [ Match, ... ]
+  "matches": [ Match, ... ],
+  "open": { "match": "<id>" | "latest", "castT": 303.0 }   // optional: open this match (and select the cast at t) on load
 }
 ```
 
