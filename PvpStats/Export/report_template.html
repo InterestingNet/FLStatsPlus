@@ -681,10 +681,13 @@ function drawAbilityTimeline(m,casts,deaths){
   if(MD.atTicks){const byLT={};unl.forEach(t=>{const k=tl(t.name)+'|'+t.t.toFixed(1);(byLT[k]??={n:tl(t.name),t:t.t,v:0,c:0,tg:new Set()});byLT[k].v+=t.dmg||t.heal||0;byLT[k].c++;byLT[k].tg.add(t.other)});
     Object.values(byLT).filter(x=>x.t>=w0&&x.t<=w1).forEach(x=>{const y=TOP+lanes.indexOf(x.n)*LH+LH/2-2;
       g+=`<rect x="${X(x.t)-1.5}" y="${y-6}" width="3" height="12" fill="var(--tick)" opacity=".75" data-tip="${esc(x.n)} at ${mmss(x.t)}: ${fmt(x.v)} on ${x.tg.size} player${x.tg.size>1?'s':''} (no matching cast found)"/>`})}
-  vis.filter(c=>c.t>=w0&&c.t<=w1).sort((a,b)=>b.total-a.total).forEach(c=>{const y=TOP+lanes.indexOf(c.name)*LH+LH/2-2,r=4+11*Math.sqrt(c.total/maxD),sel=MD.cast===c;
+  vis.filter(c=>c.t>=w0&&c.t<=w1).sort((a,b)=>(a===MD.cast)-(b===MD.cast)||b.total-a.total).forEach(c=>{const y=TOP+lanes.indexOf(c.name)*LH+LH/2-2,r=4+11*Math.sqrt(c.total/maxD),sel=MD.cast===c;
     g+=`<g class="cast" data-ci="${casts.indexOf(c)}" style="cursor:pointer" data-tip="<b>${esc(c.name)}</b> at ${mmss(c.t)}<br>${c.targets} player${c.targets>1?'s':''} hit · <b>${fmt(c.total)}</b> total${c.ticks?`<br>direct ${fmt(c.damage)} + ${c.ticks} tick${c.ticks>1?'s':''} ${fmt(c.tickDamage)} (until ${mmss(c.lastTickT)})`:''}${c.targets>1?`<br>avg ${fmt(c.total/c.targets)} per player`:''}${c.crits?`<br>${c.crits} crit${c.crits>1?'s':''}`:''}${c.kills?`<br>⚔ ${c.kills} kill${c.kills>1?'s':''}`:''}">
       <circle cx="${X(c.t)}" cy="${y}" r="${r}" fill="var(--dmg)" fill-opacity="${c.targets>1?.85:.55}" stroke="${sel?'#fff':c.kills?'var(--gold2)':'rgba(0,0,0,.4)'}" stroke-width="${sel||c.kills?2:1}"/>
-      ${c.targets>1&&r>=8?`<text x="${X(c.t)}" y="${y+3.5}" text-anchor="middle" style="fill:#08111f;font-size:10px;font-weight:700">${c.targets}</text>`:''}</g>`});
+      ${c.targets>1&&r>=8?`<text x="${X(c.t)}" y="${y+3.5}" text-anchor="middle" style="fill:#08111f;font-size:10px;font-weight:700">${c.targets}</text>`:''}</g>`;
+    if(sel){const lx=Math.min(Math.max(X(c.t),LW+60),W-60),ly=y-r-8,label=`${c.name} · ${mmss(c.t)} · ${c.targets} hit · ${kfmt(c.total)}`;
+      g+=`<g pointer-events="none"><rect x="${lx-label.length*3.1-6}" y="${ly-13}" width="${label.length*6.2+12}" height="17" rx="3" fill="#0b1424" stroke="var(--gold)"/>
+        <text x="${lx}" y="${ly-1}" text-anchor="middle" style="fill:var(--gold2);font-size:11px;font-weight:600">${esc(label)}</text></g>`}});
   host.innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>${lanes.length?'':'<div class="empty">No casts recorded.</div>'}`;
   host.querySelectorAll('.cast').forEach(n=>n.onclick=()=>{MD.cast=casts[+n.dataset.ci];drawAbilityTimeline(m,casts,deaths);showCast(m,MD.cast,casts)});
   bindTips(host);
@@ -694,6 +697,9 @@ function drawAbilityTimeline(m,casts,deaths){
   $('#atMin').onchange=e=>{MD.atMin=+e.target.value;redraw()};
   $('#atCd').onclick=()=>{MD.atCd=!MD.atCd;$('#atCd').classList.toggle('on',MD.atCd);redraw()};
   $('#atTicks').onclick=()=>{MD.atTicks=!MD.atTicks;$('#atTicks').classList.toggle('on',MD.atTicks);redraw()};
+  const jump=c=>{if(!c)return;MD.cast=c;if(!+MD.atWin)MD.atWin=60;centerWindowOn(m,c.t);redraw();showCast(m,c,casts)};
+  $('#atMost').onclick=()=>jump([...casts].sort((a,b)=>b.targets-a.targets||b.total-a.total)[0]);
+  $('#atBig').onclick=()=>jump([...casts].sort((a,b)=>b.total-a.total)[0]);
 }
 function showCast(m,c,casts){
   const host=$('#castDetail');if(!host||!c)return;
@@ -705,13 +711,30 @@ function showCast(m,c,casts){
   host.innerHTML=`<div class="deathbox"><div class="flex"><b style="font-size:14px">${esc(c.name)} at ${mmss(c.t)}</b>
      <span>· ${c.targets} player${c.targets>1?'s':''} hit · <span class="dmg"><b>${fmt(c.total)}</b></span> total${c.ticks?` <span class="dim">(direct ${fmt(c.damage)} + ${c.ticks} tick${c.ticks>1?'s':''} ${fmt(c.tickDamage)}, last tick ${mmss(c.lastTickT)})</span>`:''}${c.targets>1?` · avg ${fmt(c.total/c.targets)}`:''}${c.heal?` · <span class="heal">+${fmt(c.heal)}</span>`:''}${c.crits?` · ${c.crits} crit`:''}${c.kills?` · ⚔ ${c.kills} kill`:''}</span>
      <span class="right flex">${prev?`<button class="btn" data-nav="${casts.indexOf(prev)}">◀ previous ${esc(c.name)}</button>`:''}${next?`<button class="btn" data-nav="${casts.indexOf(next)}">next ▶</button>`:''}</span></div>
-    <div class="dim" style="margin:4px 0 8px">${ready}${ready&&c.x!=null?' · ':''}${c.x!=null?`your position X ${c.x} / Z ${c.z}`:''}</div>
+    <div class="dim" style="margin:4px 0 4px">${ready}${ready&&c.x!=null?' · ':''}${c.x!=null?`your position X ${c.x} / Z ${c.z}`:''}</div>
+    ${accountedFor(m,c,casts)}
     <table><thead><tr><th class="l">Player hit</th><th class="l">Job</th><th>Direct</th><th>Ticks</th><th>Tick Dmg</th><th>Total</th><th class="l">Flags</th><th>HP before</th></tr></thead><tbody>
     ${[...c.hits].sort((a,b)=>(b.dmg+(b.tickDmg||0))-(a.dmg+(a.tickDmg||0))).map(h=>`<tr><td class="l">${h.team?`<span class="t-${h.team}">●</span> `:''}${esc(h.other)}</td><td class="l">${esc(h.job||'')}</td>
       <td>${fmt(h.dmg)}</td><td>${h.ticks||''}</td><td>${h.tickDmg?fmt(h.tickDmg):''}</td><td><b>${fmt(h.dmg+(h.tickDmg||0))}</b>${bar(h.dmg+(h.tickDmg||0),maxH,'var(--dmg)')}</td><td class="l">${[h.crit&&'<span style="color:var(--crit)">CRIT</span>',h.dh&&'<span style="color:var(--dh)">DH</span>',h.kb&&'<b>⚔ kill</b>'].filter(Boolean).join(' ')}</td>
       <td>${h.hp!=null&&h.maxHp?pct(h.hp/h.maxHp,0):''}</td></tr>`).join('')}</tbody></table></div>`;
   host.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{const n=casts[+b.dataset.nav];MD.cast=n;centerWindowOn(m,n.t);
     if($('#atl'))drawAbilityTimeline(m,casts,deathsOf(m.combat||[]));showCast(m,n,casts)});
+}
+/* What one cast was worth: share of match damage, rank, share of the skill, share of the fight window, HP removed. */
+function accountedFor(m,c,casts){
+  const C=m.combat,parts=[];
+  const ranked=[...casts].sort((a,b)=>b.total-a.total),rank=ranked.findIndex(x=>x.t===c.t&&x.name===c.name)+1;
+  if(C){const out=C.filter(x=>x.dir==='out'&&x.kind!=='death'),all=sum(out,x=>x.dmg||0)||1;
+    parts.push(`<b>${pct(c.total/all)}</b> of all your damage this match`);
+    const end=c.lastTickT??c.t,win=sum(out.filter(x=>x.t>=c.t&&x.t<=end+.5),x=>x.dmg||0);
+    if(end>c.t)parts.push(`<b>${pct(c.total/Math.max(win,1),0)}</b> of everything you dealt from ${mmss(c.t)} to ${mmss(end)}`);}
+  else if(m._you?.damageToPCs)parts.push(`<b>${pct(c.total/m._you.damageToPCs)}</b> of your scoreboard damage to PCs`);
+  const skillTot=sum(casts.filter(x=>x.name===c.name),x=>x.total);
+  parts.push(`<b>${pct(c.total/Math.max(skillTot,1),0)}</b> of all your ${esc(c.name)} damage (${casts.filter(x=>x.name===c.name).length} casts)`);
+  parts.push(`your <b>#${rank}</b> biggest of ${casts.length} casts`);
+  const hp=c.hits.filter(h=>h.maxHp);if(hp.length)parts.push(`removed <b>${pct(sum(hp,h=>h.dmg+(h.tickDmg||0))/sum(hp,h=>h.maxHp),0)}</b> of the hit players' combined max HP`);
+  if(c.kills)parts.push(`<b>${c.kills}</b> kill${c.kills>1?'s':''}`);
+  return `<div style="margin:0 0 8px;padding:6px 9px;border-left:3px solid var(--gold);background:rgba(79,143,217,.08)"><span class="dim">Accounted for:</span> ${parts.join(' · ')}</div>`;
 }
 function combatCsv(m){
   const h=["t_s","direction","kind","skill","other","other_job","other_team","damage","heal","mp_drain","crit","direct_hit","blocked","parried","missed","invulnerable","killing_blow","pet"];
@@ -735,6 +758,7 @@ function drawCombat(m){
      <span class="dim">window</span><select id="atWin"><option value="0">Whole match</option><option value="300">5 min</option><option value="120">2 min</option><option value="60">1 min</option><option value="30">30 s</option></select>
      <input type="range" id="atPos" min="0" max="1000" value="0" style="width:180px" title="Scroll through the match">
      <span class="dim">min targets</span><select id="atMin"><option>1</option><option>2</option><option>3</option><option>5</option><option>8</option></select>
+     <span class="dim">jump to</span><button class="btn" id="atMost" title="Select the cast that hit the most players">Most players hit</button><button class="btn" id="atBig" title="Select your biggest cast (direct + ticks)">Biggest cast</button>
      <button class="btn ${MD.atTicks?'on':''}" id="atTicks" title="Show DoT/HoT ticks after each cast">Ticks</button>
      <button class="btn ${MD.atCd?'on':''}" id="atCd" title="Show when each skill was on cooldown (grey) and ready but not used (green)">Cooldowns</button></div></header>
     <div class="body"><div id="atl"></div>

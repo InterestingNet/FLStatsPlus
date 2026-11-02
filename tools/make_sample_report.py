@@ -161,6 +161,26 @@ def make_match(i, start, with_combat, demo=False):
             if random.random() < .1: row["crit"] = True
             combat.append(row)
             t += random.uniform(3, 9)
+        if demo:
+            # the scenario: Onsal mid, Bioblaster comes off cooldown at 5:00, used at 5:03 on 12 players
+            cd = next(sk[2] for sk in skills if sk[0] == "Bioblaster")
+            bio_id = 29400 + [sk[0] for sk in skills].index("Bioblaster")
+            combat[:] = [c for c in combat if not (c["name"] == "Bioblaster" and 300 - cd - 1 < c["t"] < 345)]
+            combat.append(dict(t=300 - cd, dir="out", kind="action", id=bio_id, name="Bioblaster", seq=999998, x=0.0, z=0.0,
+                               other=f'{enemies[40]["name"]} {enemies[40]["world"]}', otherPlayer=True, otherJob=enemies[40]["job"],
+                               otherTeam=enemies[40]["team"], dmg=4300, statuses=[3082]))
+            for e in random.sample(enemies[:40], 12):
+                crit = random.random() < .15
+                row = dict(t=303.0, dir="out", kind="action", id=bio_id, name="Bioblaster", seq=999999, x=1.8, z=-2.4,
+                           other=f'{e["name"]} {e["world"]}', otherPlayer=True, otherJob=e["job"], otherTeam=e["team"],
+                           otherHp=random.randint(20000, 52000), otherMaxHp=52000, dmg=int(4500 * random.uniform(.9, 1.1) * (1.5 if crit else 1)),
+                           statuses=[3082])
+                if crit: row["crit"] = True
+                combat.append(row)
+                for k_ in range(1, 6):
+                    if random.random() < .9:
+                        combat.append(dict(t=round(303 + 3 * k_ + random.uniform(0, .4), 1), dir="out", kind="dot", id=3082, name="Bioblaster",
+                                           other=row["other"], otherPlayer=True, otherJob=e["job"], otherTeam=e["team"], dmg=int(1800 * random.uniform(.9, 1.1))))
         # a few stray ticks with no matching cast (e.g. a status applied out of view)
         for _ in range(6):
             e = random.choice(enemies[:30]); t0 = random.uniform(30, dur - 20)
