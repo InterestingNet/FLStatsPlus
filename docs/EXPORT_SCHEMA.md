@@ -43,7 +43,7 @@ This one format is used by the HTML report (embedded in `<script id="report-data
 |---|---|
 | t | seconds after match start |
 | dir | `out` = you hit someone, `in` = someone hit you, `self` = you on yourself |
-| kind | `action`, `dot`, `hot`, `death` (`death` + `out` = you killed `other`; `death` + `in` = `other` killed you) |
+| kind | `action`, `dot`, `hot`, `reflect` (damage your status, e.g. Chiten, sent back onto an attacker; `dir` is `out`), `death` (`death` + `out` = you killed `other`; `death` + `in` = `other` killed you) |
 | id, name, icon | Action id/name/icon; for DoT and HoT ticks these are the Status's |
 | pet | true if your pet or summon did it |
 | other, otherPlayer, otherJob, otherTeam | the other party ("Name World" for players) |

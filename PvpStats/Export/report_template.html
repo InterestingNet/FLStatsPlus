@@ -515,7 +515,7 @@ function viewCombat(v,ms){
   const best=withLog.flatMap(m=>(m.combatSummary.topCasts||[]).map(c=>{const total=c.total??c.damage+(c.tickDamage||0);return{...c,total,m,map:m.mapName,when:m._t,avg:total/Math.max(1,c.targets)}}));
   table($('#cBest'),best,[{k:'when',label:'Match',l:1,fmt:(v,r)=>`${dt(v)} · ${esc(r.map)}`},{k:'t',label:'At',fmt:mmss},{k:'name',label:'Skill',l:1},{k:'targets',label:'Players Hit'},
     {k:'damage',label:'Direct',fmt:v=>fmt(v)},{k:'tickDamage',label:'Tick Dmg',fmt:v=>v?fmt(v):''},{k:'total',label:'Total',def:1,fmt:v=>`<b>${fmt(v)}</b>`},{k:'avg',label:'Avg / Target',fmt:kfmt},{k:'kills',label:'Kills'}],
-    {onClick:r=>{openMatch(r.m);setTimeout(()=>{const C=r.m.combat;if(!C)return;const cs=groupCasts(C.filter(c=>c.dir==='out'&&c.kind!=='death'));const hit=cs.find(c=>Math.abs(c.t-r.t)<.05&&c.name===r.name);
+    {onClick:r=>{openMatch(r.m);setTimeout(()=>{const C=r.m.combat;if(!C)return;const cs=groupCasts(C.filter(c=>c.dir==='out'&&c.kind!=='death'),C);const hit=cs.find(c=>Math.abs(c.t-r.t)<.05&&c.name===r.name);
       if(hit){MD.cast=hit;MD.atWin=120;centerWindowOn(r.m,hit.t);drawAbilityTimeline(r.m,cs,deathsOf(C));showCast(r.m,hit,cs);$('#atPanel').scrollIntoView({behavior:'smooth'})}},50)}});
 }
 
@@ -546,7 +546,7 @@ function viewMatch(v){
      <button class="btn ${MD.atCd?'on':''}" id="atCd" title="Show when each skill was on cooldown (grey) and ready but not used (green)">Cooldowns</button>`:''}</div></header>
     <div class="body"><div id="atReadout" class="dim" style="min-height:18px;font-size:12px;margin-bottom:4px">Hover the timeline to read every track at that moment · click a bubble for the cast breakdown · click ☠ / ⚔ for a recap</div><div id="atl"></div>
      <div class="legend"><span><i class="dot" style="background:var(--Maelstrom)"></i><i class="dot" style="background:var(--Adders)"></i><i class="dot" style="background:var(--Flames)"></i>team points</span><span><i class="dot" style="background:var(--gold2)"></i>your Battle High</span>
-      ${m.combat?`<span><i class="dot" style="background:var(--dmg)"></i>damage dealt / <span class="bad">taken</span> (hits + ticks)</span><span><i class="dot" style="background:var(--dmg)"></i>one cast — size = total damage incl. ticks, number = players hit</span><span style="color:var(--tick)">┃ ticks from that cast</span>
+      ${m.combat?`<span><i class="dot" style="background:var(--dmg)"></i>damage dealt / <span class="bad">taken</span> (hits + ticks)</span><span><i class="dot" style="background:var(--dmg)"></i>one cast — size = total damage incl. ticks, number = players hit</span><span style="color:var(--tick)">┃ ticks from that cast</span><span style="color:var(--dh)">● ┃ damage reflected by Chiten etc.</span>
       <span><i class="dot" style="background:rgba(160,160,160,.6)"></i>on cooldown</span><span><i class="dot" style="background:rgba(95,184,122,.6)"></i>ready but not used</span>`:''}<span class="bad">┊ ☠ your deaths</span><span class="good">┊ ⚔ your kills</span></div>
      <div id="castDetail"></div></div></section>`:''}
   <section class="panel"><header><h2>Team Points</h2></header><div class="body" id="teamPts"></div></section>
@@ -606,7 +606,7 @@ function drawScoreboard(m,order){
     host.querySelector('.flex').insertAdjacentHTML('afterbegin','<span class="dim" style="margin-right:auto">Switch to "No grouping" to sort by any column.</span>');}
 }
 /* ─────────── casts / ability timeline ─────────── */
-function groupCasts(out){
+function groupCasts(out,all){
   // hits from one cast share the server effect sequence; fall back to same skill within 0.5 s
   const res=[];let last=null;
   for(const r of out.filter(r=>r.kind==='action').sort((a,b)=>a.t-b.t)){
@@ -621,6 +621,21 @@ function groupCasts(out){
     last.targets=last.hits.length;
   }
   res.unlinked=attachTicks(res,out.filter(r=>r.kind==='dot'||r.kind==='hot'));
+  // damage reflected by your statuses (e.g. Chiten): one bubble per activation, placed when you activated it
+  const selfActs=(all||[]).filter(c=>c.dir==='self'&&c.kind==='action');
+  let rc=null;
+  for(const r of out.filter(r=>r.kind==='reflect').sort((a,b)=>a.t-b.t)){
+    if(!rc||rc.name!==r.name||r.t-rc.firstT>15){
+      const act=selfActs.filter(a=>a.name===r.name&&a.t<=r.t&&r.t-a.t<=15).pop();
+      rc={t:act?act.t:r.t,firstT:r.t,id:r.id,name:r.name,reflect:true,x:act?.x??r.x,z:act?.z??r.z,hits:[],damage:0,shieldDamage:0,heal:0,crits:0,kills:0,targets:0,
+        statuses:new Set(),ticks:0,tickDamage:0,tickHeal:0,lastTickT:r.t,tickList:[]};res.push(rc)}
+    let h=rc.hits.find(h=>h.other===r.other);
+    if(!h){h={other:r.other,job:r.otherJob,team:r.otherTeam,dmg:0,shield:0,heal:0,hp:r.otherHp,maxHp:r.otherMaxHp,ticks:0,tickDmg:0,tickHeal:0,reflects:0};rc.hits.push(h)}
+    h.dmg+=r.dmg||0;h.shield+=r.shield||0;h.reflects++;if(r.kb)h.kb=true;
+    rc.damage+=r.dmg||0;rc.shieldDamage+=r.shield||0;if(r.crit)rc.crits++;if(r.kb)rc.kills++;rc.targets=rc.hits.length;
+    rc.tickList.push(r);rc.lastTickT=r.t;rc.reflectHits=(rc.reflectHits||0)+1;
+  }
+  res.sort((a,b)=>a.t-b.t);
   res.forEach(c=>c.total=c.damage+c.tickDamage);
   return res;
 }
@@ -708,17 +723,17 @@ function drawAbilityTimeline(m,casts,deaths){
     g+=`<line x1="${X(d.t)}" x2="${X(d.t)}" y1="6" y2="${H-18}" stroke="${col}" stroke-dasharray="3 3" opacity=".7"/>
       <text class="death" data-di="${deaths.indexOf(d)}" x="${X(d.t)}" y="${(tracks[0]?.top??TOP)+12}" text-anchor="middle" style="font-size:13px;cursor:pointer;fill:${col}" data-tip="${d.dir==='in'?'Killed by':'You killed'} ${esc(d.other)} — ${esc(d.name)} at ${mmss(d.t)}<br><span class='dim'>click for recap</span>">${d.dir==='in'?'☠':'⚔'}</text>`});
   // tick trails
-  if(MD.atTicks)vis.filter(c=>c.ticks&&c.lastTickT>=w0&&c.t<=w1).forEach(c=>{const yy=TOP+lanes.indexOf(c.name)*LH+LH/2-2,sel=MD.cast===c;
-    g+=`<line x1="${X(Math.max(c.t,w0))}" x2="${X(Math.min(c.lastTickT,w1))}" y1="${yy}" y2="${yy}" stroke="var(--tick)" stroke-opacity="${sel?.9:.35}" stroke-width="${sel?2:1.2}"/>`;
+  if(MD.atTicks)vis.filter(c=>(c.ticks||c.reflect)&&c.lastTickT>=w0&&c.t<=w1).forEach(c=>{const yy=TOP+lanes.indexOf(c.name)*LH+LH/2-2,sel=MD.cast===c,tc=c.reflect?'var(--dh)':'var(--tick)';
+    g+=`<line x1="${X(Math.max(c.t,w0))}" x2="${X(Math.min(c.lastTickT,w1))}" y1="${yy}" y2="${yy}" stroke="${tc}" stroke-opacity="${sel?.9:.35}" stroke-width="${sel?2:1.2}"/>`;
     const byT={};c.tickList.forEach(t=>{const k=t.t.toFixed(1);byT[k]=(byT[k]||0)+(t.dmg||t.heal||0)});
-    Object.entries(byT).forEach(([t,v])=>{t=+t;if(t<w0||t>w1)return;g+=`<line x1="${X(t)}" x2="${X(t)}" y1="${yy-5}" y2="${yy+5}" stroke="var(--tick)" stroke-opacity="${sel?1:.6}" stroke-width="1.4" data-tip="${esc(c.name)} tick at ${mmss(t)}: ${fmt(v)}"/>`})});
+    Object.entries(byT).forEach(([t,v])=>{t=+t;if(t<w0||t>w1)return;g+=`<line x1="${X(t)}" x2="${X(t)}" y1="${yy-5}" y2="${yy+5}" stroke="${tc}" stroke-opacity="${sel?1:.6}" stroke-width="1.4" data-tip="${esc(c.name)} ${c.reflect?'reflect':'tick'} at ${mmss(t)}: ${fmt(v)}"/>`})});
   if(MD.atTicks){const byLT={};unl.forEach(t=>{const k=tl(t.name)+'|'+t.t.toFixed(1);(byLT[k]??={n:tl(t.name),t:t.t,v:0,tg:new Set()});byLT[k].v+=t.dmg||t.heal||0;byLT[k].tg.add(t.other)});
     Object.values(byLT).filter(x=>x.t>=w0&&x.t<=w1).forEach(x=>{const yy=TOP+lanes.indexOf(x.n)*LH+LH/2-2;
       g+=`<rect x="${X(x.t)-1.5}" y="${yy-6}" width="3" height="12" fill="var(--tick)" opacity=".75" data-tip="${esc(x.n)} at ${mmss(x.t)}: ${fmt(x.v)} on ${x.tg.size} player${x.tg.size>1?'s':''} (no matching cast found)"/>`})}
   // cast bubbles (selected one drawn last, with a callout)
   vis.filter(c=>c.t>=w0&&c.t<=w1).sort((a,b)=>(a===MD.cast)-(b===MD.cast)||b.total-a.total).forEach(c=>{const yy=TOP+lanes.indexOf(c.name)*LH+LH/2-2,r=4+11*Math.sqrt(c.total/maxD),sel=MD.cast===c;
-    g+=`<g class="cast" data-ci="${casts.indexOf(c)}" style="cursor:pointer" data-tip="<b>${esc(c.name)}</b> at ${mmss(c.t)}<br>${c.targets} player${c.targets>1?'s':''} hit · <b>${fmt(c.total)}</b> total${c.ticks?`<br>direct ${fmt(c.damage)} + ${c.ticks} tick${c.ticks>1?'s':''} ${fmt(c.tickDamage)} (until ${mmss(c.lastTickT)})`:''}${c.shieldDamage?`<br>${fmt(c.shieldDamage)} of it hit shields`:''}${c.targets>1?`<br>avg ${fmt(c.total/c.targets)} per player`:''}${c.crits?`<br>${c.crits} crit${c.crits>1?'s':''}`:''}${c.kills?`<br>⚔ ${c.kills} kill${c.kills>1?'s':''}`:''}">
-      <circle cx="${X(c.t)}" cy="${yy}" r="${r}" fill="var(--dmg)" fill-opacity="${c.targets>1?.85:.55}" stroke="${sel?'#fff':c.kills?'var(--gold2)':'rgba(0,0,0,.4)'}" stroke-width="${sel||c.kills?2:1}"/>
+    g+=`<g class="cast" data-ci="${casts.indexOf(c)}" style="cursor:pointer" data-tip="<b>${esc(c.name)}</b> at ${mmss(c.t)}<br>${c.reflect?`reflected <b>${fmt(c.total)}</b> back onto ${c.targets} attacker${c.targets>1?'s':''} (${c.reflectHits} hit${c.reflectHits>1?'s':''} on you)`:`${c.targets} player${c.targets>1?'s':''} hit · <b>${fmt(c.total)}</b> total`}${c.ticks?`<br>direct ${fmt(c.damage)} + ${c.ticks} tick${c.ticks>1?'s':''} ${fmt(c.tickDamage)} (until ${mmss(c.lastTickT)})`:''}${c.shieldDamage?`<br>${fmt(c.shieldDamage)} of it hit shields`:''}${c.targets>1?`<br>avg ${fmt(c.total/c.targets)} per player`:''}${c.crits?`<br>${c.crits} crit${c.crits>1?'s':''}`:''}${c.kills?`<br>⚔ ${c.kills} kill${c.kills>1?'s':''}`:''}">
+      <circle cx="${X(c.t)}" cy="${yy}" r="${r}" fill="${c.reflect?'var(--dh)':'var(--dmg)'}" fill-opacity="${c.targets>1?.85:.55}" stroke="${sel?'#fff':c.kills?'var(--gold2)':'rgba(0,0,0,.4)'}" stroke-width="${sel||c.kills?2:1}"/>
       ${c.targets>1&&r>=8?`<text x="${X(c.t)}" y="${yy+3.5}" text-anchor="middle" style="fill:#08111f;font-size:10px;font-weight:700">${c.targets}</text>`:''}</g>`;
     if(sel){const lx=Math.min(Math.max(X(c.t),LW+90),W-90),ly=yy-r-8,lab=`${c.name} · ${mmss(c.t)} · ${c.targets} hit · ${kfmt(c.total)}`;
       g+=`<line x1="${X(c.t)}" x2="${X(c.t)}" y1="6" y2="${H-18}" stroke="#fff" stroke-opacity=".35"/>
@@ -760,16 +775,16 @@ function showDeath(m,d){
 function showCast(m,c,casts){
   const host=$('#castDetail');if(!host||!c)return;
   const same=casts.filter(x=>x.name===c.name).sort((a,b)=>a.t-b.t),i=same.findIndex(x=>x.t===c.t),prev=same[i-1],next=same[i+1];
-  const{cd,ch}=recastOf(m,c);let ready='';
+  const{cd,ch}=c.reflect?{cd:0,ch:0}:recastOf(m,c);let ready='';
   if(cd>=5&&ch<=1&&prev){const up=prev.t+cd;ready=c.t-up>.5?`came off cooldown at ${mmss(up)} — <b>${(c.t-up).toFixed(1)}s</b> before you used it`:'used as soon as it came off cooldown'}
   else if(cd>=5&&ch<=1&&!prev)ready='first use this match';
   const maxH=Math.max(1,...c.hits.map(h=>h.dmg+(h.tickDmg||0)));
   host.innerHTML=`<div class="deathbox"><div class="flex"><b style="font-size:14px">${esc(c.name)} at ${mmss(c.t)}</b>
-     <span>· ${c.targets} player${c.targets>1?'s':''} hit · <span class="dmg"><b>${fmt(c.total)}</b></span> total${c.ticks?` <span class="dim">(direct ${fmt(c.damage)} + ${c.ticks} tick${c.ticks>1?'s':''} ${fmt(c.tickDamage)}, last tick ${mmss(c.lastTickT)})</span>`:''}${c.shieldDamage?` <span class="dim">· ${fmt(c.shieldDamage)} into shields</span>`:''}${c.targets>1?` · avg ${fmt(c.total/c.targets)}`:''}${c.heal?` · <span class="heal">+${fmt(c.heal)}</span>`:''}${c.crits?` · ${c.crits} crit`:''}${c.kills?` · ⚔ ${c.kills} kill`:''}</span>
+     <span>· ${c.reflect?`reflected onto ${c.targets} attacker${c.targets>1?'s':''} from ${c.reflectHits||c.hits.length} hit${(c.reflectHits||0)>1?'s':''} on you`:`${c.targets} player${c.targets>1?'s':''} hit`} · <span class="dmg"><b>${fmt(c.total)}</b></span> total${c.ticks?` <span class="dim">(direct ${fmt(c.damage)} + ${c.ticks} tick${c.ticks>1?'s':''} ${fmt(c.tickDamage)}, last tick ${mmss(c.lastTickT)})</span>`:''}${c.shieldDamage?` <span class="dim">· ${fmt(c.shieldDamage)} into shields</span>`:''}${c.targets>1?` · avg ${fmt(c.total/c.targets)}`:''}${c.heal?` · <span class="heal">+${fmt(c.heal)}</span>`:''}${c.crits?` · ${c.crits} crit`:''}${c.kills?` · ⚔ ${c.kills} kill`:''}</span>
      <span class="right flex">${prev?`<button class="btn" data-nav="${casts.indexOf(prev)}">◀ previous ${esc(c.name)}</button>`:''}${next?`<button class="btn" data-nav="${casts.indexOf(next)}">next ▶</button>`:''}</span></div>
     <div class="dim" style="margin:4px 0 4px">${ready}${ready&&c.x!=null?' · ':''}${c.x!=null?`your position X ${c.x} / Z ${c.z}`:''}</div>
     ${accountedFor(m,c,casts)}
-    <table><thead><tr><th class="l">Player hit</th><th class="l">Job</th><th>Direct</th><th title="Part of Direct that hit a shield">Shield</th><th>Ticks</th><th>Tick Dmg</th><th>Total</th><th class="l">Flags</th><th>HP before</th></tr></thead><tbody>
+    <table><thead><tr><th class="l">${c.reflect?'Attacker':'Player hit'}</th><th class="l">Job</th><th>${c.reflect?'Reflected':'Direct'}</th><th title="Part of Direct that hit a shield">Shield</th><th>Ticks</th><th>Tick Dmg</th><th>Total</th><th class="l">Flags</th><th>HP before</th></tr></thead><tbody>
     ${[...c.hits].sort((a,b)=>(b.dmg+(b.tickDmg||0))-(a.dmg+(a.tickDmg||0))).map(h=>`<tr><td class="l">${h.team?`<span class="t-${h.team}">●</span> `:''}${esc(h.other)}</td><td class="l">${esc(h.job||'')}</td>
       <td>${fmt(h.dmg)}</td><td>${h.shield?`<span style="color:var(--dh)">${fmt(h.shield)}</span>`:''}</td><td>${h.ticks||''}</td><td>${h.tickDmg?fmt(h.tickDmg):''}</td><td><b>${fmt(h.dmg+(h.tickDmg||0))}</b>${bar(h.dmg+(h.tickDmg||0),maxH,'var(--dmg)')}</td><td class="l">${[h.crit&&'<span style="color:var(--crit)">CRIT</span>',h.dh&&'<span style="color:var(--dh)">DH</span>',h.kb&&'<b>⚔ kill</b>'].filter(Boolean).join(' ')}</td>
       <td>${h.hp!=null&&h.maxHp?pct(h.hp/h.maxHp,0):''}</td></tr>`).join('')}</tbody></table></div>`;
@@ -819,7 +834,7 @@ function drawCombat(m){
      <input id="cText" placeholder="Filter skill / player…" value="${esc(MD.cText)}"></div></header><div class="body" id="cLog"></div></section>`:''}`;
   host.querySelectorAll('[data-cv]').forEach(b=>b.onclick=()=>{MD.cView=b.dataset.cv;MD.cSkill=null;drawCombat(m);bindTips(host)});
   // casts (ability timeline)
-  const casts=C?groupCasts(out):(S.topCasts||[]);
+  const casts=C?groupCasts(out,C):(S.topCasts||[]);
   casts.forEach(c=>{c.total??=c.damage+(c.tickDamage||0)});
   const castStats={};casts.forEach(c=>{const x=(castStats[c.name]??={casts:0,targets:0,maxTargets:0,best:0,tick:0});x.casts++;x.targets+=c.targets;x.maxTargets=Math.max(x.maxTargets,c.targets);x.best=Math.max(x.best,c.total);x.tick+=c.tickDamage||0});
   const idle=C?idleReady(m,casts):{};
@@ -853,7 +868,7 @@ function drawCombat(m){
   $('#skillTitle').textContent=dir==='out'?'Your Skills':'Skills Used On You';
   $('#tgtTitle').textContent=dir==='out'?`Targets — ${MD.cSkill||'all skills'}`:`Attackers — ${MD.cSkill||'all skills'}`;
   if(C&&dir==='out'){const cred={};out.filter(t=>t._cast).forEach(t=>{(cred[t.name]??=new Set()).add(t._cast.name)});skills.forEach(r=>{if(r.kind!=='action'&&cred[r.name])r.credit=[...cred[r.name]].join(', ')})}
-  table($('#cSkills'),skills,[{k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind!=='action'?` <span class="pill">${r.kind} ticks</span>`:'')+(r.credit?` <span class="dim" title="These ticks are also counted in the casts that applied them">→ ${esc(r.credit)}</span>`:'')},{k:'casts',label:'Casts',fmt:v=>v??''},{k:'hits',label:'Hits'},
+  table($('#cSkills'),skills,[{k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind==='reflect'?' <span class="pill">reflected</span>':r.kind!=='action'?` <span class="pill">${r.kind} ticks</span>`:'')+(r.credit?` <span class="dim" title="These ticks are also counted in the casts that applied them">→ ${esc(r.credit)}</span>`:'')},{k:'casts',label:'Casts',fmt:v=>v??''},{k:'hits',label:'Hits'},
     {k:'avgT',label:'Avg Targets',fmt:v=>v==null?'':fmt(v,1)},{k:'maxT',label:'Max Targets',fmt:v=>v??''},{k:'best',label:'Best Cast',fmt:v=>v?kfmt(v):'',title:'Biggest single cast, direct + ticks'},
     {k:'tickD',label:'+ Ticks',fmt:v=>v?kfmt(v):'',title:'DoT tick damage credited to this skill'},{k:'withTicks',label:'Incl. Ticks',fmt:v=>v?kfmt(v):''},
     {k:'idle',label:'Ready & Unused',fmt:v=>v==null?'':mmss(v),title:'Time this skill sat off cooldown between uses (single-charge skills with a cooldown of 5 s or more)'},
@@ -869,7 +884,7 @@ function drawCombat(m){
       const rows=C.filter(c=>(MD.cDir==='all'||(MD.cDir==='death'?c.kind==='death':c.dir===MD.cDir&&c.kind!=='death'))&&(!q||(c.name+" "+c.other).toLowerCase().includes(q)))
         .map((c,i)=>({...c,i,amt:(c.dmg||0)||(c.heal||0)}));
       table($('#cLog'),rows,[{k:'t',label:'Time',l:1,fmt:mmss},{k:'dir',label:'',l:1,fmt:(v,r)=>r.kind==='death'?(v==='in'?'<span class="bad">☠</span>':'<span class="good">⚔</span>'):v==='out'?'<span class="dmg">→</span>':v==='in'?'<span class="bad">←</span>':'<span class="heal">↺</span>'},
-        {k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind!=='action'&&r.kind!=='death'?` <span class="pill">${r.kind} tick</span>`:'')+(r.pet?' <span class="pill">pet</span>':'')+(r._cast?` <span class="dim">from ${esc(r._cast.name)} @ ${mmss(r._cast.t)}</span>`:'')},
+        {k:'name',label:'Skill',l:1,fmt:(v,r)=>esc(v)+(r.kind==='reflect'?' <span class="pill">reflected</span>':r.kind!=='action'&&r.kind!=='death'?` <span class="pill">${r.kind} tick</span>`:'')+(r.pet?' <span class="pill">pet</span>':'')+(r._cast?` <span class="dim">from ${esc(r._cast.name)} @ ${mmss(r._cast.t)}</span>`:'')},
         {k:'other',label:'Player',l:1,fmt:(v,r)=>`${r.otherTeam?`<span class="t-${r.otherTeam}">●</span> `:''}${esc(v)} ${r.otherJob?`<span class="pill">${esc(r.otherJob)}</span>`:''}`},
         {k:'amt',label:'Amount',fmt:(v,r)=>r.dmg?`<span class="${r.dir==='in'?'bad':'dmg'}">${fmt(r.dmg)}</span>${r.shield?` <span style="color:var(--dh)" title="absorbed by shield">(${fmt(r.shield)} shield)</span>`:''}`:r.heal?`<span class="heal">+${fmt(r.heal)}</span>`:r.miss?'<span class="dim">miss</span>':r.invuln?'<span class="dim">invuln</span>':''},
         {k:'flags',label:'Flags',l:1,fmt:(v,r)=>[r.crit&&'<span style="color:var(--crit)">CRIT</span>',r.dh&&'<span style="color:var(--dh)">DH</span>',r.blocked&&'block',r.parried&&'parry',r.kb&&'<b>☠ KB</b>',r.statusApplied&&`+${r.statusApplied} status`].filter(Boolean).join(' ')}],{sort:'t',dir:1});};

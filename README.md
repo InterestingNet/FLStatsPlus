@@ -60,6 +60,10 @@ Tabs, all with the same filters (map, your job, result, dates, tags, favorites, 
 
 A history report embeds the raw combat log when it has 25 matches or fewer. Above that it embeds per-match combat summaries only, to keep the file small. Single-match reports always include the full log.
 
+## Reflected damage (Chiten etc.)
+
+When someone hits you while a reflect status such as Chiten is up, the damage it sends back is counted as **your damage dealt** to that attacker. Reflected damage that kills the attacker also counts as the killing blow. On the timeline, each Chiten activation is one purple bubble placed when you used it. The bubble's size is the total reflected, the number is how many attackers took damage, and each reflect is marked after it. Clicking the bubble lists every attacker and how much they took. Reflects are also in Skills (marked *reflected*), Targets and the combat log. To recognise other jobs' reflect statuses, add their names to `ReflectStatusNames` in `FrontlineCombatLogger.cs`. Until then they're labelled "Reflected damage".
+
 ## Shields
 
 The game reports a hit's damage **after** shields, so a hit fully soaked by a shield shows as 0. The plugin reads the victim's shield before the hit and again from the game's effect-result message after it, then adds the absorbed part back. Totals therefore include shield damage, as the scoreboard does. The shield part is shown separately: in the cast breakdown, a *To Shields* column in Skills, the combat log ("(x shield)"), and the Damage dealt/taken tiles. Shields are reported in whole percent of max HP, so each value is accurate to about 1% of the victim's max HP.

@@ -18,6 +18,8 @@ public enum CombatEntryKind {
     DoT = 1,
     HoT = 2,
     Death = 3,
+    /// <summary>Damage reflected back onto an attacker by one of your statuses (e.g. Chiten). Direction is Dealt.</summary>
+    Reflect = 4,
 }
 
 /// <summary>

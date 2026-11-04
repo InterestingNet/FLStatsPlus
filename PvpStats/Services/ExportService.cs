@@ -309,7 +309,7 @@ internal class ExportService {
         var inRows = rows.Where(r => r.Dir == "in").ToList();
         var casts = GroupCasts(outRows);
         var dealt = Skills(outRows);
-        foreach(var s in dealt.Where(s => s.Kind == "action")) {
+        foreach(var s in dealt.Where(s => s.Kind is "action" or "reflect")) {
             var mine = casts.Where(c => c.Name == s.Name).ToList();
             s.Casts = mine.Count;
             s.MaxTargets = mine.Count > 0 ? mine.Max(c => c.Targets) : 0;
@@ -336,11 +336,17 @@ internal class ExportService {
         var casts = new List<CastDto>();
         CastDto? last = null;
         var rows = outRows.ToList();
-        foreach(var r in rows.Where(r => r.Kind == "action").OrderBy(r => r.T)) {
-            bool same = last != null && last.Id == r.Id &&
-                (r.Seq != null ? r.Seq == last.SeqKey : Math.Abs(r.T - last.T) <= 0.5);
+        foreach(var r in rows.Where(r => r.Kind is "action" or "reflect").OrderBy(r => r.Kind == "reflect").ThenBy(r => r.T)) {
+            bool same;
+            if(r.Kind == "reflect") {
+                // everything one reflect status (e.g. a Chiten) sends back within 15 s counts as one "cast"
+                same = last != null && last.Reflect == true && last.Name == r.Name && r.T - last.T <= 15;
+            } else {
+                same = last != null && last.Id == r.Id &&
+                    (r.Seq != null ? r.Seq == last.SeqKey : Math.Abs(r.T - last.T) <= 0.5);
+            }
             if(!same) {
-                last = new CastDto { T = r.T, Id = r.Id, Name = r.Name, X = r.X, Z = r.Z, SeqKey = r.Seq };
+                last = new CastDto { T = r.T, Id = r.Id, Name = r.Name, X = r.X, Z = r.Z, SeqKey = r.Seq, Reflect = r.Kind == "reflect" ? true : null };
                 casts.Add(last);
             }
             var hit = last!.Hits.FirstOrDefault(h => h.Other == r.Other);
@@ -362,7 +368,8 @@ internal class ExportService {
             if(r.Kb == true) last.Kills++;
             last.Targets = last.Hits.Count;
         }
-        AttachTicks(casts, rows.Where(r => r.Kind is "dot" or "hot"));
+        casts.Sort((a, b) => a.T.CompareTo(b.T));
+        AttachTicks(casts.Where(c => c.Reflect != true).ToList(), rows.Where(r => r.Kind is "dot" or "hot"));
         return casts;
     }
 
@@ -529,6 +536,8 @@ internal class ExportService {
         public long TickDamage { get; set; }
         public long TickHeal { get; set; }
         public double? LastTickT { get; set; }
+        /// <summary>True for damage reflected by one of your statuses (e.g. Chiten): one "cast" per activation window.</summary>
+        public bool? Reflect { get; set; }
         /// <summary>Direct damage + tick damage.</summary>
         public long Total => Damage + TickDamage;
         public List<CastHitDto> Hits { get; set; } = [];

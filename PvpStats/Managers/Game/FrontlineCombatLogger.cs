@@ -274,8 +274,11 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                         // reflected onto the caster: re-express relative to the local player
                         if(casterIsSelf) {
                             e = Clone(entry, CombatDirection.Self);
+                        } else if(fx.Type is (byte)ActionEffectType.Damage or (byte)ActionEffectType.BlockedDamage or (byte)ActionEffectType.ParriedDamage) {
+                            // someone hit you and took damage back from your status (Chiten etc.): that's your damage dealt
+                            e = ReflectEntry(entry, header->GlobalSequence);
                         } else {
-                            continue; // the other player's lifesteal off of you is not your stat
+                            continue; // the attacker's own lifesteal / heals off of you are not your stat
                         }
                     }
                     switch((ActionEffectType)fx.Type) {
@@ -307,11 +310,18 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                             e.StatusesApplied++;
                             (e.AppliedStatusIds ??= []).Add(fx.Value);
                             any = true; break;
+                        case ActionEffectType.ApplyStatusEffectSource:
+                            // self-buffs such as Chiten: record the activation so reflects can be tied to it
+                            if(casterIsSelf) any = true;
+                            break;
                         case ActionEffectType.StatusNoEffect:
                         case ActionEffectType.FullResistStatus:
                             e.StatusesResisted++; any = true; break;
                     }
                     if(reflected && e != entry && (e.Damage | e.Heal | e.MpGain | e.MpDrain) != 0) {
+                        if(e.Kind == CombatEntryKind.Reflect) {
+                            TrackShield(e, caster, header->GlobalSequence);
+                        }
                         Add(e);
                     }
                 }
@@ -328,6 +338,42 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
             if(t0 != 0) _hookTicks += Stopwatch.GetTimestamp() - t0;
             _actionEffectHook!.Original(casterEntityId, casterPtr, targetPos, header, effects, targetIds);
         }
+    }
+
+    private static readonly string[] ReflectStatusNames = ["Chiten"];
+
+    /// <summary>
+    /// A Dealt entry for damage your status reflected onto <paramref name="attackerHit"/>'s attacker.
+    /// Named after your active reflect status (e.g. Chiten), or "Reflected damage" if none is recognised.
+    /// </summary>
+    private CombatLogEntry ReflectEntry(CombatLogEntry attackerHit, uint seq) {
+        string name = "Reflected damage";
+        uint id = 0, icon = 0;
+        var me = _plugin.ObjectTable.LocalPlayer;
+        if(me != null) {
+            foreach(var st in me.StatusList) {
+                if(st.StatusId == 0) continue;
+                var info = StatusInfo(st.StatusId);
+                if(Array.IndexOf(ReflectStatusNames, info.Name) >= 0) {
+                    name = info.Name; id = st.StatusId; icon = info.Icon;
+                    break;
+                }
+            }
+        }
+        return new CombatLogEntry {
+            Timestamp = attackerHit.Timestamp,
+            Direction = CombatDirection.Dealt,
+            Kind = CombatEntryKind.Reflect,
+            ActionId = id,
+            ActionName = name,
+            Icon = icon,
+            GlobalSequence = seq,
+            Other = attackerHit.Other,
+            OtherIsPlayer = attackerHit.OtherIsPlayer,
+            OtherClassJobId = attackerHit.OtherClassJobId,
+            OtherHpBefore = attackerHit.OtherHpBefore,
+            OtherMaxHp = attackerHit.OtherMaxHp,
+        };
     }
 
     private static CombatLogEntry Clone(CombatLogEntry src, CombatDirection dir) => new() {
