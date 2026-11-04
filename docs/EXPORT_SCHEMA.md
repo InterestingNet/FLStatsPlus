@@ -48,7 +48,8 @@ This one format is used by the HTML report (embedded in `<script id="report-data
 | pet | true if your pet or summon did it |
 | other, otherPlayer, otherJob, otherTeam | the other party ("Name World" for players) |
 | otherHp, otherMaxHp | the other party's HP when the packet arrived (before the hit) |
-| dmg, heal, mpDrain, mpGain | amounts |
+| dmg, heal, mpDrain, mpGain | amounts. `dmg` is total damage **including** damage absorbed by shields (matches the scoreboard) |
+| shield | part of `dmg` that hit a shield (accurate to ~1% of the victim's max HP) |
 | crit, dh, blocked, parried, miss, invuln | hit flags |
 | statusApplied, statusResisted | number of status effects the action applied or that were resisted |
 | kb | this hit was the killing blow |

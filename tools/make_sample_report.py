@@ -187,6 +187,10 @@ def make_match(i, start, with_combat, demo=False):
             for k_ in range(4):
                 combat.append(dict(t=round(t0 + 3 * k_, 1), dir="out", kind="dot", id=1234, name="Burns", other=f'{e["name"]} {e["world"]}',
                                    otherPlayer=True, otherJob=e["job"], otherTeam=e["team"], dmg=random.randint(900, 1300)))
+        # some hits land on shields: part (or all) of the damage goes to the shield
+        for c in combat:
+            if c["kind"] == "action" and c["dir"] in ("out", "in") and c.get("dmg") and random.random() < .15:
+                c["shield"] = int(c["dmg"] * random.uniform(.2, 1.0))
         combat.sort(key=lambda c: c["t"])
         # kills & deaths
         outs = [c for c in combat if c["dir"] == "out" and c.get("dmg")]
@@ -213,8 +217,8 @@ def summarize(rows):
             if r["kind"] == "death":
                 continue
             k = (r["name"], r["kind"])
-            x = g.setdefault(k, dict(name=r["name"], kind=r["kind"], hits=0, damage=0, heal=0, crits=0, directHits=0, maxHit=0, killingBlows=0))
-            x["hits"] += 1; x["damage"] += r.get("dmg", 0); x["heal"] += r.get("heal", 0)
+            x = g.setdefault(k, dict(name=r["name"], kind=r["kind"], hits=0, damage=0, shieldDamage=0, heal=0, crits=0, directHits=0, maxHit=0, killingBlows=0))
+            x["hits"] += 1; x["damage"] += r.get("dmg", 0); x["shieldDamage"] += r.get("shield", 0); x["heal"] += r.get("heal", 0)
             x["crits"] += 1 if r.get("crit") else 0; x["directHits"] += 1 if r.get("dh") else 0
             x["maxHit"] = max(x["maxHit"], r.get("dmg", 0)); x["killingBlows"] += 1 if r.get("kb") else 0
         return sorted(g.values(), key=lambda x: -(x["damage"] + x["heal"]))

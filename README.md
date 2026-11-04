@@ -60,6 +60,10 @@ Tabs, all with the same filters (map, your job, result, dates, tags, favorites, 
 
 A history report embeds the raw combat log when it has 25 matches or fewer. Above that it embeds per-match combat summaries only, to keep the file small. Single-match reports always include the full log.
 
+## Shields
+
+The game reports a hit's damage **after** shields, so a hit fully soaked by a shield shows as 0. The plugin reads the victim's shield before the hit and again from the game's effect-result message after it, then adds the absorbed part back. Totals therefore include shield damage, as the scoreboard does. The shield part is shown separately: in the cast breakdown, a *To Shields* column in Skills, the combat log ("(x shield)"), and the Damage dealt/taken tiles. Shields are reported in whole percent of max HP, so each value is accurate to about 1% of the victim's max HP.
+
 ## What the combat log can and can't see
 
 The log records events **involving you**. The game only sends your client events for players near you, so you cannot see fights elsewhere on the map. The end-of-match scoreboard still covers all 72 players. Logged damage can be higher than the scoreboard's "damage to PCs", because the log also counts hits on NPCs and objects.

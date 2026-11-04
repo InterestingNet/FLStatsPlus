@@ -62,6 +62,15 @@ public class CombatLogEntry {
     public List<uint>? AppliedStatusIds { get; set; }
     public int StatusesResisted { get; set; }
 
+    /// <summary>Victim's shield before the hit, in % of their max HP (as the game reports it). Null if they had none.</summary>
+    public byte? ShieldBefore { get; set; }
+    /// <summary>
+    /// Damage soaked by the victim's shield. <see cref="Damage"/> is HP damage only, so total damage = Damage + ShieldAbsorbed.
+    /// Exact when the hit broke through to HP (the whole shield was consumed); otherwise shield-before minus shield-after
+    /// from the game's effect-result message. Accurate to ~1% of the victim's max HP (shields are reported in whole percent).
+    /// </summary>
+    public long? ShieldAbsorbed { get; set; }
+
     /// <summary>Set on the last hit before a death credited to the other party.</summary>
     public bool KillingBlow { get; set; }
 

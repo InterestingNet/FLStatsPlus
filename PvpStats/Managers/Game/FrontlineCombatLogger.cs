@@ -9,6 +9,7 @@ using PvpStats.Types.Match.Timeline;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Numerics;
 using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 using GameObjectId = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObjectId;
@@ -41,6 +42,27 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
     [Signature("E8 ?? ?? ?? ?? 0F B7 0B 83 E9 64", DetourName = nameof(ActorControlDetour))]
     private readonly Hook<ProcessPacketActorControlDelegate> _actorControlHook = null!;
 
+    // Sent after a hit resolves: the target's HP / shield after the effect, tagged with the action's sequence number.
+    private delegate void ProcessPacketEffectResultDelegate(uint targetId, IntPtr data, byte isReplay);
+    [Signature("48 8B C4 44 88 40 18 89 48 08", DetourName = nameof(EffectResultDetour))]
+    private readonly Hook<ProcessPacketEffectResultDelegate> _effectResultHook = null!;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)]
+    private struct EffectResultHeader {
+        public uint Unknown1;
+        public uint RelatedActionSequence;
+        public uint ActorId;
+        public uint CurrentHp;
+        public uint MaxHp;
+        public ushort CurrentMp;
+        public ushort Unknown3;
+        public byte DamageShield;   // % of max HP
+        public byte EffectCount;
+    }
+
+    // hits on shielded players waiting for their effect result, keyed by (victim id, action sequence)
+    private readonly Dictionary<(uint Target, uint Seq), CombatLogEntry> _pendingShield = [];
+
     private delegate void ProcessHoTDoTDelegate(IntPtr targetStatusManager, IntPtr targetObj, uint statusId, uint kind, int amount, uint sourceEntityId, int beneficial);
     [Signature("48 8B C4 48 89 58 ?? 48 89 68 ?? 48 89 70 ?? 57 41 54 41 56 48 83 EC ?? 4C 89 78", DetourName = nameof(HoTDoTDetour))]
     private readonly Hook<ProcessHoTDoTDelegate> _hotDotHook = null!;
@@ -67,12 +89,14 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
         _actionEffectHook.Enable();
         _actorControlHook.Enable();
         _hotDotHook.Enable();
+        _effectResultHook.Enable();
     }
 
     public void Dispose() {
         _actionEffectHook?.Dispose();
         _actorControlHook?.Dispose();
         _hotDotHook?.Dispose();
+        _effectResultHook?.Dispose();
     }
 
     /// <summary>Begin writing entries into <paramref name="sink"/>.</summary>
@@ -81,6 +105,7 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
             _localId = 0; // resolved lazily on the game thread
             _petIds.Clear();
             _nameCache.Clear();
+            _pendingShield.Clear();
             _hookTicks = _hookCalls = _recorded = 0;
             _startedAt = DateTime.UtcNow;
             _sink = sink;
@@ -233,7 +258,7 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                 };
                 FillOther(entry, casterIsSelf ? target : ResolveOwner(caster));
 
-                bool any = false;
+                bool any = false, hadDamage = false;
                 for(var j = 0; j < 8; j++) {
                     ref var fx = ref effects[i].Effects[j];
                     if(fx.Type == 0) continue;
@@ -260,6 +285,7 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                         case ActionEffectType.BlockedDamage:
                         case ActionEffectType.ParriedDamage:
                             e.Damage += amount;
+                            if(!reflected) hadDamage = true;
                             e.Crit |= (fx.Param0 & 0x20) == 0x20;
                             e.DirectHit |= (fx.Param0 & 0x40) == 0x40;
                             e.DamageType = (byte)(fx.Param1 & 0xF);
@@ -290,6 +316,9 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                     }
                 }
                 if(any) {
+                    if(hadDamage && entry.Direction != CombatDirection.Self) {
+                        TrackShield(entry, targetIsSelf ? _plugin.ObjectTable.LocalPlayer : target, header->GlobalSequence);
+                    }
                     Add(entry);
                 }
             }
@@ -305,6 +334,62 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
         Timestamp = src.Timestamp, Kind = src.Kind, ActionId = src.ActionId, ActionName = src.ActionName, Icon = src.Icon,
         FromPet = src.FromPet, GlobalSequence = src.GlobalSequence, Direction = dir, Other = "(self)",
     };
+
+    /// <summary>
+    /// If the victim had a shield, note it. A hit that also did HP damage broke the shield completely, so the
+    /// whole shield counts as absorbed right away; the effect result (if it arrives) refines it either way.
+    /// </summary>
+    private void TrackShield(CombatLogEntry entry, IGameObject? victim, uint seq) {
+        if(victim is not ICharacter vc) return;
+        var pct = vc.ShieldPercentage;
+        if(pct == 0) return;
+        entry.ShieldBefore = pct;
+        if(entry.Damage > 0) {
+            entry.ShieldAbsorbed = (long)pct * vc.MaxHp / 100;
+        }
+        if(_pendingShield.Count > 128) {
+            var stale = DateTime.UtcNow.AddSeconds(-3);
+            foreach(var k in _pendingShield.Where(kv => kv.Value.Timestamp < stale).Select(kv => kv.Key).ToList()) {
+                _pendingShield.Remove(k);
+            }
+        }
+        _pendingShield[(vc.EntityId, seq)] = entry;
+    }
+
+    private void EffectResultDetour(uint targetId, IntPtr data, byte isReplay) {
+        long t0 = 0;
+        try {
+            // fast path: nothing to match unless one of your hits landed on a shield
+            if(_sink == null || _pendingShield.Count == 0 || data == IntPtr.Zero) return;
+            t0 = Stopwatch.GetTimestamp();
+            _hookCalls++;
+            var msg = (EffectResultHeader*)data;
+            if(!_pendingShield.Remove((targetId, msg->RelatedActionSequence), out var entry)) {
+                // fallback: the most recent pending hit on this target within 1.5 s
+                (uint, uint)? best = null;
+                DateTime bestT = DateTime.UtcNow.AddSeconds(-1.5);
+                foreach(var kv in _pendingShield) {
+                    if(kv.Key.Target == targetId && kv.Value.Timestamp >= bestT) {
+                        best = kv.Key;
+                        bestT = kv.Value.Timestamp;
+                    }
+                }
+                if(best == null || !_pendingShield.Remove(best.Value, out entry)) return;
+            }
+            long maxHp = msg->MaxHp;
+            if(maxHp <= 0 || entry.ShieldBefore is not byte before) return;
+            int after = msg->DamageShield;
+            long absorbed = Math.Max(0, before - after) * maxHp / 100;
+            lock(_lock) {
+                entry.ShieldAbsorbed = Math.Max(entry.ShieldAbsorbed ?? 0, absorbed);
+            }
+        } catch(Exception ex) {
+            Plugin.Log2.Error(ex, "FL combat log: effect result");
+        } finally {
+            if(t0 != 0) _hookTicks += Stopwatch.GetTimestamp() - t0;
+            _effectResultHook.Original(targetId, data, isReplay);
+        }
+    }
 
     private void HoTDoTDetour(IntPtr targetStatusManager, IntPtr targetObj, uint statusId, uint kind, int amount, uint sourceEntityId, int beneficial) {
         long t0 = 0;

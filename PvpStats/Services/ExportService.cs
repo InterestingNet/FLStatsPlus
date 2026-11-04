@@ -260,7 +260,9 @@ internal class ExportService {
                         OtherTeam = other?.Team,
                         OtherHp = e.OtherHpBefore,
                         OtherMaxHp = e.OtherMaxHp,
-                        Dmg = e.Damage == 0 ? null : e.Damage,
+                        // total damage = HP damage + damage soaked by shields (matches the game's scoreboard)
+                        Dmg = e.Damage + (e.ShieldAbsorbed ?? 0) == 0 ? null : e.Damage + (e.ShieldAbsorbed ?? 0),
+                        Shield = e.ShieldAbsorbed is > 0 ? e.ShieldAbsorbed : null,
                         Heal = e.Heal == 0 ? null : e.Heal,
                         MpDrain = e.MpDrain == 0 ? null : e.MpDrain,
                         MpGain = e.MpGain == 0 ? null : e.MpGain,
@@ -293,7 +295,7 @@ internal class ExportService {
         static List<SkillRowDto> Skills(IEnumerable<CombatDto> src) => src.Where(r => r.Kind != "death")
             .GroupBy(r => (r.Name, r.Kind)).Select(g => new SkillRowDto {
                 Name = g.Key.Name, Kind = g.Key.Kind, Icon = g.First().Icon,
-                Hits = g.Count(), Damage = g.Sum(r => r.Dmg ?? 0), Heal = g.Sum(r => r.Heal ?? 0),
+                Hits = g.Count(), Damage = g.Sum(r => r.Dmg ?? 0), ShieldDamage = g.Sum(r => r.Shield ?? 0), Heal = g.Sum(r => r.Heal ?? 0),
                 Crits = g.Count(r => r.Crit == true), DirectHits = g.Count(r => r.Dh == true),
                 MaxHit = g.Max(r => r.Dmg ?? 0), KillingBlows = g.Count(r => r.Kb == true),
             }).OrderByDescending(r => r.Damage + r.Heal).ToList();
@@ -347,12 +349,14 @@ internal class ExportService {
                 last.Hits.Add(hit);
             }
             hit.Dmg += r.Dmg ?? 0;
+            hit.Shield += r.Shield ?? 0;
             hit.Heal += r.Heal ?? 0;
             if(r.Crit == true) hit.Crit = true;
             if(r.Dh == true) hit.Dh = true;
             if(r.Kb == true) hit.Kb = true;
             foreach(var s in r.Statuses ?? []) last.AppliedStatuses.Add(s);
             last.Damage += r.Dmg ?? 0;
+            last.ShieldDamage += r.Shield ?? 0;
             last.Heal += r.Heal ?? 0;
             if(r.Crit == true) last.Crits++;
             if(r.Kb == true) last.Kills++;
@@ -511,7 +515,10 @@ internal class ExportService {
         public uint Id { get; set; }
         public string Name { get; set; } = "";
         public int Targets { get; set; }
+        /// <summary>Direct damage incl. shields.</summary>
         public long Damage { get; set; }
+        /// <summary>Part of <see cref="Damage"/> that hit shields.</summary>
+        public long ShieldDamage { get; set; }
         public long Heal { get; set; }
         public int Crits { get; set; }
         public int Kills { get; set; }
@@ -534,6 +541,7 @@ internal class ExportService {
         public string? Job { get; set; }
         public string? Team { get; set; }
         public long Dmg { get; set; }
+        public long Shield { get; set; }
         public long Heal { get; set; }
         public bool? Crit { get; set; }
         public bool? Dh { get; set; }
@@ -589,7 +597,10 @@ internal class ExportService {
         public string? OtherTeam { get; set; }
         public uint? OtherHp { get; set; }
         public uint? OtherMaxHp { get; set; }
+        /// <summary>Total damage: HP damage + <see cref="Shield"/>.</summary>
         public long? Dmg { get; set; }
+        /// <summary>Part of <see cref="Dmg"/> that hit a shield.</summary>
+        public long? Shield { get; set; }
         public long? Heal { get; set; }
         public long? MpDrain { get; set; }
         public long? MpGain { get; set; }
@@ -628,6 +639,7 @@ internal class ExportService {
         public uint? Icon { get; set; }
         public int Hits { get; set; }
         public long Damage { get; set; }
+        public long ShieldDamage { get; set; }
         public long Heal { get; set; }
         public int Crits { get; set; }
         public int DirectHits { get; set; }
