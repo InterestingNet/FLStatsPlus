@@ -544,7 +544,7 @@ function viewMatch(v){
      <span class="dim">jump to</span><button class="btn" id="atMost" title="Select the cast that hit the most players">Most players hit</button><button class="btn" id="atBig" title="Select your biggest cast (direct + ticks)">Biggest cast</button>
      <button class="btn ${MD.atTicks?'on':''}" id="atTicks" title="Show DoT/HoT ticks after each cast">Ticks</button>
      <button class="btn ${MD.atCd?'on':''}" id="atCd" title="Show when each skill was on cooldown (grey) and ready but not used (green)">Cooldowns</button>`:''}</div></header>
-    <div class="body"><div id="atReadout" class="dim" style="min-height:18px;font-size:12px;margin-bottom:4px">Hover the timeline to read every track at that moment · click a bubble for the cast breakdown · click ☠ / ⚔ for a recap</div><div id="atl"></div>
+    <div class="body"><div id="atReadout" class="dim" style="height:20px;line-height:20px;font-size:12px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Hover the timeline to read every track at that moment · click a bubble for the cast breakdown · click ☠ / ⚔ for a recap</div><div id="atl"></div>
      <div class="legend"><span><i class="dot" style="background:var(--Maelstrom)"></i><i class="dot" style="background:var(--Adders)"></i><i class="dot" style="background:var(--Flames)"></i>team points</span><span><i class="dot" style="background:var(--gold2)"></i>your Battle High</span>
       ${m.combat?`<span><i class="dot" style="background:var(--dmg)"></i>damage dealt / <span class="bad">taken</span> (hits + ticks)</span><span><i class="dot" style="background:var(--dmg)"></i>one cast — size = total damage incl. ticks, number = players hit</span><span style="color:var(--tick)">┃ ticks from that cast</span><span style="color:var(--dh)">● ┃ damage reflected by Chiten etc.</span>
       <span><i class="dot" style="background:rgba(160,160,160,.6)"></i>on cooldown</span><span><i class="dot" style="background:rgba(95,184,122,.6)"></i>ready but not used</span>`:''}<span class="bad">┊ ☠ your deaths</span><span class="good">┊ ⚔ your kills</span></div>
@@ -748,7 +748,7 @@ function drawAbilityTimeline(m,casts,deaths){
     if(m.teamPoints)parts.push(TEAMS.filter(k=>m.teamPoints[k]).map(k=>`<span class="t-${k}">${k}</span> ${fmt(valAt(m.teamPoints[k],t))}`).join(' · '));
     if(m.battleHigh?.length)parts.push(`BH ${fmt(valAt(m.battleHigh,t))}`);
     if(B){const k=Math.floor((t-w0)/B);parts.push(`<span class="dmg">dealt ${kfmt(bo[k]||0)}</span> / <span class="bad">taken ${kfmt(bi[k]||0)}</span> (${mmss(w0+k*B)}–${mmss(w0+(k+1)*B)})`)}
-    const near=casts.filter(c=>Math.abs(c.t-t)<=Math.max(1,span/200));if(near.length)parts.push(near.map(c=>`${esc(c.name)} ×${c.targets} ${kfmt(c.total)}`).join(', '));
+    const near=casts.filter(c=>Math.abs(c.t-t)<=Math.max(1,span/200)).sort((a,b)=>b.total-a.total);if(near.length)parts.push(near.slice(0,3).map(c=>`${esc(c.name)} ×${c.targets} ${kfmt(c.total)}`).join(', ')+(near.length>3?` <span title="${esc(near.slice(3).map(c=>`${c.name} ×${c.targets} ${kfmt(c.total)}`).join(', '))}">+${near.length-3} more</span>`:''));
     ro.innerHTML=parts.join(' &nbsp;|&nbsp; ')};
   svg.onmouseleave=()=>xh.setAttribute('visibility','hidden');
   host.querySelectorAll('.cast').forEach(n=>n.onclick=()=>{MD.cast=casts[+n.dataset.ci];drawAbilityTimeline(m,casts,deaths);showCast(m,MD.cast,casts)});
