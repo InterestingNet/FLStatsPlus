@@ -65,9 +65,19 @@ Every report includes each match's full combat log. History reports store the lo
 - **Download combat log CSV**: every hit from every filtered match in one file.
 - **Match JSON** and **Combat log CSV**: the same, for one match.
 
+## Your shields
+
+The plugin records your shield whenever it changes, reading it straight from game memory each frame with no allocations. In the report:
+
+- **Your shield** track on the Match Timeline, with ▲ at each gain. Hover a ▲ to see where it came from.
+- **Shields & Reflects** section for each match: shield gained, damage your shields absorbed, shield that expired unused, and a *Shield sources* table.
+- **Cast breakdown** shows "Granted you X shield" for casts that gave you one, such as Ogi Namikiri hitting 2+ enemies.
+
+A gain is credited to your own action within 1.5 s before it. If there isn't one, it goes to a teammate's action on you in that window, shown as "Galvanize (from Name World)", and otherwise to "Unknown". The **Combat** tab totals all of this across matches.
+
 ## Reflected damage (Chiten etc.)
 
-When someone hits you while a reflect status such as Chiten is up, the damage it sends back is counted as **your damage dealt** to that attacker. Reflected damage that kills the attacker also counts as the killing blow. On the timeline, each Chiten activation is one purple bubble placed when you used it. The bubble's size is the total reflected, the number is how many attackers took damage, and each reflect is marked after it. Clicking the bubble lists every attacker and how much they took. Reflects are also in Skills (marked *reflected*), Targets and the combat log. To recognise other jobs' reflect statuses, add their names to `ReflectStatusNames` in `FrontlineCombatLogger.cs`. Until then they're labelled "Reflected damage".
+When someone hits you while a reflect status such as Chiten is up, the damage it sends back is counted as **your damage dealt** to that attacker. Reflected damage that kills the attacker also counts as the killing blow. On the timeline, each Chiten activation is one purple bubble placed when you used it. The bubble's size is the total reflected, the number is how many attackers took damage, and each reflect is marked after it. Clicking the bubble lists every attacker and how much they took. Reflects are also in Skills (marked *reflected*), Targets, the combat log, and the **Shields & Reflects** section. That section lists each activation with its attackers, hits reflected, damage and kills; click one to jump to it on the timeline. To recognise other jobs' reflect statuses, add their names to `ReflectStatusNames` in `FrontlineCombatLogger.cs`. Until then they're labelled "Reflected damage".
 
 ## Shields
 

@@ -33,6 +33,8 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
     private readonly Plugin _plugin;
     private readonly object _lock = new();
     private List<CombatLogEntry>? _sink;
+    private List<ShieldSample>? _shieldSink;
+    private int _lastShield = -1;
     private readonly Dictionary<uint, (string Name, uint Icon)> _actionCache = [];
     private readonly Dictionary<uint, (string Name, uint Icon)> _statusCache = [];
 
@@ -100,8 +102,10 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
     }
 
     /// <summary>Begin writing entries into <paramref name="sink"/>.</summary>
-    public void Start(List<CombatLogEntry> sink) {
+    public void Start(List<CombatLogEntry> sink, List<ShieldSample>? shieldSink = null) {
         lock(_lock) {
+            _shieldSink = shieldSink;
+            _lastShield = -1;
             _localId = 0; // resolved lazily on the game thread
             _petIds.Clear();
             _nameCache.Clear();
@@ -124,6 +128,24 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                 Plugin.Log2.Information($"[FLStatsPlus] combat log overhead: {OverheadSummary}");
             }
             _sink = null;
+            _shieldSink = null;
+        }
+    }
+
+    /// <summary>
+    /// Call every frame during a match. Records your shield only when it changes, reading two numbers straight from
+    /// game memory (no object wrappers, no allocations on unchanged frames).
+    /// </summary>
+    public void SampleSelfShield() {
+        if(_shieldSink == null) return;
+        var me = FFXIVClientStructs.FFXIV.Client.Game.Control.Control.GetLocalPlayer();
+        if(me == null) return;
+        var ch = (Character*)me;
+        int pct = ch->ShieldValue;
+        if(pct == _lastShield) return;
+        _lastShield = pct;
+        lock(_lock) {
+            _shieldSink?.Add(new ShieldSample { Timestamp = DateTime.UtcNow, Percent = (byte)pct, MaxHp = ch->MaxHealth });
         }
     }
 

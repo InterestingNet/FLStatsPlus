@@ -294,14 +294,39 @@ internal class ExportService {
                 dto.Actions = rows.Where(r => r.Kind == "action" || r.Kind == "death").Select(r => r.Id).Distinct()
                     .Select(id => (id, info: ActionMeta(id))).Where(x => x.info != null)
                     .ToDictionary(x => x.id.ToString(), x => x.info!);
-                dto.CombatSummary = Summarize(rows);
+                if(tl.SelfShield is { Count: > 0 } shield) {
+                    List<ShieldSample> samples;
+                    lock(shield) { samples = shield.ToList(); }
+                    dto.SelfShield = samples.Select(s => new[] { Rel(s.Timestamp), Math.Round(s.Percent * (double)s.MaxHp / 100), s.Percent }).ToList();
+                }
+                dto.CombatSummary = Summarize(rows, dto.SelfShield);
                 if(includeRawCombat) dto.Combat = rows;
             }
         }
         return dto;
     }
 
-    private static CombatSummaryDto Summarize(List<CombatDto> rows) {
+    /// <summary>
+    /// Credits each increase of your shield to what caused it: your own action within 1.5 s before it (e.g. Ogi Namikiri),
+    /// otherwise a teammate's action on you in that window ("Galvanize (from Name World)"), otherwise "Unknown".
+    /// </summary>
+    internal static List<(double T, double Amount, string Source)> ShieldGains(List<CombatDto> rows, List<double[]>? samples) {
+        var gains = new List<(double, double, string)>();
+        if(samples == null) return gains;
+        double prev = 0;
+        foreach(var s in samples) {
+            double t = s[0], hp = s[1];
+            if(hp > prev) {
+                var mine = rows.LastOrDefault(r => r.Kind == "action" && (r.Dir == "out" || r.Dir == "self") && r.T >= t - 1.5 && r.T <= t + 0.3);
+                var ally = mine == null ? rows.LastOrDefault(r => r.Kind == "action" && r.Dir == "in" && (r.Dmg ?? 0) == 0 && r.T >= t - 1.5 && r.T <= t + 0.3) : null;
+                gains.Add((t, hp - prev, mine?.Name ?? (ally != null ? $"{ally.Name} (from {ally.Other})" : "Unknown")));
+            }
+            prev = hp;
+        }
+        return gains;
+    }
+
+    private static CombatSummaryDto Summarize(List<CombatDto> rows, List<double[]>? shieldSamples = null) {
         static List<SkillRowDto> Skills(IEnumerable<CombatDto> src) => src.Where(r => r.Kind != "death")
             .GroupBy(r => (r.Name, r.Kind)).Select(g => new SkillRowDto {
                 Name = g.Key.Name, Kind = g.Key.Kind, Icon = g.First().Icon,
@@ -333,6 +358,15 @@ internal class ExportService {
             SelfSkills = Skills(rows.Where(r => r.Dir == "self")),
             Targets = Others(outRows),
             Sources = Others(inRows),
+            ShieldGained = (long)ShieldGains(rows, shieldSamples).Sum(g => g.Amount),
+            ShieldAbsorbedOnYou = inRows.Sum(r => r.Shield ?? 0),
+            ShieldExpired = shieldSamples == null ? 0 : (long)Math.Max(0, ShieldDrops(shieldSamples) - inRows.Sum(r => r.Shield ?? 0)),
+            ShieldSources = ShieldGains(rows, shieldSamples).GroupBy(g => g.Source)
+                .Select(g => new ShieldSourceDto { Source = g.Key, Times = g.Count(), Total = (long)g.Sum(x => x.Amount), Biggest = (long)g.Max(x => x.Amount) })
+                .OrderByDescending(x => x.Total).ToList(),
+            Reflected = outRows.Where(r => r.Kind == "reflect").Sum(r => r.Dmg ?? 0),
+            ReflectHits = outRows.Count(r => r.Kind == "reflect"),
+            ReflectKills = outRows.Count(r => r.Kind == "reflect" && r.Kb == true),
             Kills = outRows.Count(r => r.Kind == "death"),
             Deaths = inRows.Count(r => r.Kind == "death"),
         };
@@ -439,6 +473,15 @@ internal class ExportService {
         return meta;
     }
 
+    private static double ShieldDrops(List<double[]> samples) {
+        double prev = 0, drops = 0;
+        foreach(var s in samples) {
+            if(s[1] < prev) drops += prev - s[1];
+            prev = s[1];
+        }
+        return drops;
+    }
+
     private string? JobAbbr(uint? classJobId) {
         if(classJobId is null or 0) return null;
         if(!_jobAbbrCache.TryGetValue(classJobId.Value, out var abbr)) {
@@ -511,6 +554,8 @@ internal class ExportService {
         public List<PlayerDto> Players { get; set; } = [];
         /// <summary>team → [[seconds, points], ...]</summary>
         public Dictionary<string, List<double[]>>? TeamPoints { get; set; }
+        /// <summary>Your shield whenever it changed: [[seconds, shield HP, % of max HP], ...]</summary>
+        public List<double[]>? SelfShield { get; set; }
         /// <summary>[[seconds, battle high level], ...]</summary>
         public List<double[]>? BattleHigh { get; set; }
         public CombatSummaryDto? CombatSummary { get; set; }
@@ -650,8 +695,26 @@ internal class ExportService {
         public List<OtherRowDto> Sources { get; set; } = [];
         public int Kills { get; set; }
         public int Deaths { get; set; }
+        /// <summary>Shield you received (sum of every increase of your shield).</summary>
+        public long ShieldGained { get; set; }
+        /// <summary>Damage your shields soaked up.</summary>
+        public long ShieldAbsorbedOnYou { get; set; }
+        /// <summary>Shield that went away without absorbing damage (expired / replaced).</summary>
+        public long ShieldExpired { get; set; }
+        public List<ShieldSourceDto> ShieldSources { get; set; } = [];
+        /// <summary>Damage your statuses (e.g. Chiten) reflected onto attackers.</summary>
+        public long Reflected { get; set; }
+        public int ReflectHits { get; set; }
+        public int ReflectKills { get; set; }
         /// <summary>Your 15 biggest casts by total damage.</summary>
         public List<CastDto> TopCasts { get; set; } = [];
+    }
+
+    internal class ShieldSourceDto {
+        public string Source { get; set; } = "";
+        public int Times { get; set; }
+        public long Total { get; set; }
+        public long Biggest { get; set; }
     }
 
     internal class SkillRowDto {

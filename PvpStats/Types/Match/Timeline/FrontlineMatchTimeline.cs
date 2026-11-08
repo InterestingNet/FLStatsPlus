@@ -12,6 +12,9 @@ internal class FrontlineMatchTimeline : PvpMatchTimeline {
     [BsonIgnore]
     public List<CombatLogEntry>? SelfCombatLog { get; set; }
 
+    /// <summary>FLStatsPlus: your shield every time it changed (gains, absorbed damage, expiry).</summary>
+    public List<ShieldSample>? SelfShield { get; set; }
+
     /// <summary>FLStatsPlus: <see cref="SelfCombatLog"/> as gzip-compressed JSON (see <see cref="CombatLogCodec"/>).</summary>
     public byte[]? SelfCombatLogPacked { get; set; }
 

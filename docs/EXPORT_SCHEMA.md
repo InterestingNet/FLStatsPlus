@@ -29,6 +29,7 @@ This one format is used by the HTML report (embedded in `<script id="report-data
 | players | Player[] | all players on the scoreboard (normally 72) |
 | teamPoints | `{ team: [[t, points], ...] }` | team score over time |
 | battleHigh | `[[t, battleHighPoints], ...]` | your Battle High points over time (Battle High V at 100) |
+| selfShield | `[[t, shieldHp, percentOfMaxHp], ...]` | your shield every time it changed |
 | combatSummary | CombatSummary | per-match rollup of your combat log |
 | actions | `{ actionId: { name, recastSec, maxCharges, icon } }` | cooldown info for the ability timeline |
 | combatGz | HTML history reports: `combat` as gzip-compressed JSON, base64-encoded (unpacked when the match is opened) |
@@ -64,5 +65,6 @@ This one format is used by the HTML report (embedded in `<script id="report-data
 `dealt`, `taken`, `selfSkills`: SkillRow[] (`name`, `kind`, `icon`, `hits`, `damage`, `heal`, `crits`, `directHits`, `maxHit`, `killingBlows`).
 `targets`, `sources`: OtherRow[] (`name`, `job`, `team`, `hits`, `damage`, `heal`, `killingBlows`).
 `kills`, `deaths`: ints.
+`shieldGained`, `shieldAbsorbedOnYou`, `shieldExpired`: your shield totals. `shieldSources`: `[{source, times, total, biggest}]`. `reflected`, `reflectHits`, `reflectKills`: damage your statuses (e.g. Chiten) sent back.
 `topCasts`: your 15 biggest casts by `total`: `t`, `id`, `name`, `targets`, `damage` (direct), `ticks`, `tickDamage`, `tickHeal`, `lastTickT`, `total` (direct + ticks), `heal`, `crits`, `kills`, `x`, `z`, `hits[]` (`other`, `job`, `team`, `dmg`, `ticks`, `tickDmg`, `tickHeal`, `heal`, `crit`, `dh`, `kb`).
 Rows in `dealt` also carry `casts`, `maxTargets`, `bestCast` (direct + ticks) and `tickDamage`.

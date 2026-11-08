@@ -498,6 +498,8 @@ function viewCombat(v,ms){
     <section class="panel"><header><h2>Damage & Kills by Enemy Job</h2></header><div class="body" id="cJobOut"></div></section>
     <section class="panel"><header><h2>Damage Taken & Deaths by Enemy Job</h2></header><div class="body" id="cJobIn"></div></section>
    </div>
+   <section class="panel"><header><h2>Shields & Reflects — all logged matches</h2></header><div class="body"><div class="tiles" id="cSR"></div>
+     <div class="grid2" style="margin-top:12px"><div><div class="dim" style="margin-bottom:4px">Shield sources</div><div id="cSRsrc"></div></div><div><div class="dim" style="margin-bottom:4px">Reflects by status</div><div id="cSRref"></div></div></div></div></section>
    <section class="panel"><header><h2>Best Casts — all logged matches</h2><span class="dim">your biggest single uses of a skill (all players hit, added together) · click to open the match</span></header><div class="body" id="cBest"></div></section>
    <div class="grid2">
     <section class="panel"><header><h2>Players You Hit Most</h2></header><div class="body" id="cTargets"></div></section>
@@ -513,6 +515,16 @@ function viewCombat(v,ms){
   table($('#cJobOut'),byJob(targets),jc);table($('#cJobIn'),byJob(sources),jc);
   const oc=[{k:'name',label:'Player',l:1,fmt:(v,r)=>`${r.team?`<span class="t-${r.team}">●</span> `:''}${esc(v)}`},{k:'job',label:'Job',l:1},{k:'matches',label:'Matches'},{k:'hits',label:'Hits'},{k:'damage',label:'Damage',def:1,fmt:kfmt},{k:'killingBlows',label:'KB'}];
   table($('#cTargets'),targets,oc);table($('#cSources'),sources,oc);
+  {const S_=withLog.map(m=>m.combatSummary);
+    $('#cSR').innerHTML=[["Shield gained",kfmt(sum(S_,s=>s.shieldGained||0))],["Damage your shields absorbed",kfmt(sum(S_,s=>s.shieldAbsorbedOnYou||0))],["Shield expired unused",kfmt(sum(S_,s=>s.shieldExpired||0))],
+      ["Reflected damage",kfmt(sum(S_,s=>s.reflected||0))],["Hits reflected",fmt(sum(S_,s=>s.reflectHits||0))],["Reflect kills",fmt(sum(S_,s=>s.reflectKills||0))]]
+      .map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+    const src={};S_.forEach(s=>(s.shieldSources||[]).forEach(r=>{const k=r.source.replace(/ \(from .*\)$/,' (from teammates)');const x=(src[k]??={source:k,times:0,total:0,biggest:0,matches:0});x.times+=r.times;x.total+=r.total;x.biggest=Math.max(x.biggest,r.biggest);x.matches++}));
+    table($('#cSRsrc'),Object.values(src).map(x=>({...x,avg:x.total/x.times})),[{k:'source',label:'Source',l:1},{k:'matches',label:'Matches'},{k:'times',label:'Times'},{k:'total',label:'Total',def:1,fmt:kfmt},{k:'avg',label:'Avg',fmt:kfmt},{k:'biggest',label:'Biggest',fmt:kfmt}],{noscroll:1});
+    const rf=dealt.filter(r=>r.kind==='reflect').map(r=>({name:r.name,matches:r.matches,hits:r.hits,damage:r.damage,kb:r.killingBlows}));
+    table($('#cSRref'),rf,[{k:'name',label:'Status',l:1},{k:'matches',label:'Matches'},{k:'hits',label:'Hits'},{k:'damage',label:'Reflected',def:1,fmt:kfmt},{k:'kb',label:'Kills'}],{noscroll:1});
+    if(!Object.keys(src).length)$('#cSRsrc').innerHTML='<div class="empty">No shield data yet. Matches played on this update or later record it.</div>';
+    if(!rf.length)$('#cSRref').innerHTML='<div class="empty">No reflected damage recorded.</div>';}
   const best=withLog.flatMap(m=>(m.combatSummary.topCasts||[]).map(c=>{const total=c.total??c.damage+(c.tickDamage||0);return{...c,total,m,map:m.mapName,when:m._t,avg:total/Math.max(1,c.targets)}}));
   table($('#cBest'),best,[{k:'when',label:'Match',l:1,fmt:(v,r)=>`${dt(v)} · ${esc(r.map)}`},{k:'t',label:'At',fmt:mmss},{k:'name',label:'Skill',l:1},{k:'targets',label:'Players Hit'},
     {k:'damage',label:'Direct',fmt:v=>fmt(v)},{k:'tickDamage',label:'Tick Dmg',fmt:v=>v?fmt(v):''},{k:'total',label:'Total',def:1,fmt:v=>`<b>${fmt(v)}</b>`},{k:'avg',label:'Avg / Target',fmt:kfmt},{k:'kills',label:'Kills'}],
@@ -559,7 +571,7 @@ function viewMatch(v){
      <button class="btn ${MD.atCd?'on':''}" id="atCd" title="Show when each skill was on cooldown (grey) and ready but not used (green)">Cooldowns</button>
      <button class="btn ${MD.atKD?'on':''}" id="atKD" title="Show your kills (green) and deaths (red) as lines across the timeline">Kills/Deaths</button>`:''}</div></header>
     <div class="body"><div id="atReadout" class="dim" style="height:20px;line-height:20px;font-size:12px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Hover the timeline to read every track at that moment · click a bubble for the cast breakdown · click ☠ / ⚔ for a recap</div><div id="atl"></div>
-     <div class="legend"><span><i class="dot" style="background:var(--Maelstrom)"></i><i class="dot" style="background:var(--Adders)"></i><i class="dot" style="background:var(--Flames)"></i>team points</span><span><i class="dot" style="background:var(--gold2)"></i>your Battle High</span>
+     <div class="legend"><span><i class="dot" style="background:var(--Maelstrom)"></i><i class="dot" style="background:var(--Adders)"></i><i class="dot" style="background:var(--Flames)"></i>team points</span><span><i class="dot" style="background:var(--gold2)"></i>your Battle High</span>${m.selfShield?.length?'<span><i class="dot" style="background:var(--dh)"></i>your shield (▲ gained)</span>':''}
       ${m.combat?`<span><i class="dot" style="background:var(--dmg)"></i>damage dealt / <span class="bad">taken</span> (hits + ticks)</span><span><i class="dot" style="background:var(--dmg)"></i>one cast — size = total damage incl. ticks, number = players hit</span><span style="color:var(--tick)">┃ ticks from that cast</span><span style="color:var(--dh)">● ┃ damage reflected by Chiten etc.</span>
       <span><i class="dot" style="background:rgba(160,160,160,.6)"></i>on cooldown</span><span><i class="dot" style="background:rgba(95,184,122,.6)"></i>ready but not used</span>`:''}<span class="bad">┊ ☠ your deaths</span><span class="good">┊ ⚔ your kills</span></div>
      <div id="castDetail"></div></div></section>`:''}
@@ -685,6 +697,20 @@ function atWindow(m){const W=+MD.atWin||m.durationSec;const start=W>=m.durationS
 function centerWindowOn(m,t){if(!+MD.atWin||+MD.atWin>=m.durationSec)return;const W=+MD.atWin;MD.atPos=Math.round(Math.max(0,Math.min(1,(t-W/2)/(m.durationSec-W)))*1000)}
 /* Integrated Match Timeline: team points, Battle High, your damage dealt/taken and one lane per ability, all on one
    time axis with one zoom window. Deaths/kills cut across every track. Works without a combat log (first two tracks). */
+/* Your shield gains, each credited to your own action within 1.5 s before it (e.g. Ogi Namikiri), otherwise a
+   teammate's action on you in that window, otherwise "Unknown". Also returns the total drop of your shield. */
+function shieldInfo(m){
+  if(m._shield)return m._shield;
+  const S=m.selfShield||[],C=m.combat||[],gains=[];let prev=0,drops=0;
+  for(const [t,hp] of S){
+    if(hp>prev){const mine=C.filter(r=>r.kind==='action'&&(r.dir==='out'||r.dir==='self')&&r.t>=t-1.5&&r.t<=t+.3).pop();
+      const ally=mine?null:C.filter(r=>r.kind==='action'&&r.dir==='in'&&!r.dmg&&r.t>=t-1.5&&r.t<=t+.3).pop();
+      gains.push({t,amount:hp-prev,source:mine?mine.name:ally?`${ally.name} (from ${ally.other})`:'Unknown',castT:mine?.t})}
+    else if(hp<prev)drops+=prev-hp;
+    prev=hp}
+  const absorbed=sum(C.filter(r=>r.dir==='in'),r=>r.shield||0);
+  return m._shield={gains,gained:sum(gains,g=>g.amount),absorbed,expired:Math.max(0,drops-absorbed),drops};
+}
 function valAt(series,t){let v=0;for(const p of series){if(p[0]<=t)v=p[1];else break}return v}
 let _atArgs=null;
 function deselectCast(){
@@ -723,6 +749,15 @@ function drawAbilityTimeline(m,casts,deaths){
     const pts=[[w0,valAt(m.battleHigh,w0)],...m.battleHigh.filter(p=>p[0]>w0&&p[0]<=w1)];let d=`M${X(pts[0][0])},${Y(pts[0][1])}`;
     for(let k=1;k<pts.length;k++)d+=`H${X(pts[k][0])}V${Y(pts[k][1])}`;d+=`H${X(w1)}`;
     g+=`<path d="${d}" fill="none" stroke="var(--gold2)" stroke-width="1.8"/>`;tracks.push({name:'bh',top,h:TH});y+=TH+8}
+  // ── track: your shield ──
+  if(m.selfShield&&m.selfShield.length){const TH=56,top=y,ymax=Math.max(1,...m.selfShield.map(p=>p[1]));const Y=v=>top+TH-v/ymax*(TH-6);
+    g+=`<rect x="0" y="${top}" width="${W}" height="${TH}" fill="rgba(255,255,255,.015)"/>`+label('Your shield',top+16,'gained ▲ / used up');
+    g+=`<text x="${LW-4}" y="${Y(ymax)+3}" text-anchor="end">${kfmt(ymax)}</text><text x="${LW-4}" y="${Y(0)+3}" text-anchor="end">0</text>`;
+    const pts=[[w0,valAt(m.selfShield,w0)],...m.selfShield.filter(p=>p[0]>w0&&p[0]<=w1)];let d=`M${X(pts[0][0])},${Y(pts[0][1])}`;
+    for(let k=1;k<pts.length;k++)d+=`H${X(pts[k][0])}V${Y(pts[k][1])}`;d+=`H${X(w1)}`;
+    g+=`<path d="${d}V${Y(0)}H${X(pts[0][0])}Z" fill="rgba(180,156,240,.18)"/><path d="${d}" fill="none" stroke="var(--dh)" stroke-width="1.8"/>`;
+    shieldInfo(m).gains.filter(x=>x.t>=w0&&x.t<=w1).forEach(x=>g+=`<text x="${X(x.t)}" y="${top+TH-2}" text-anchor="middle" style="fill:var(--dh);font-size:10px" data-tip="+${fmt(x.amount)} shield at ${mmss(x.t)}<br>from <b>${esc(x.source)}</b>">▲</text>`);
+    tracks.push({name:'shield',top,h:TH});y+=TH+8}
   // ── track: damage dealt / taken ──
   let B=0,bo=[],bi=[];
   if(C){const TH=80,top=y,mid=top+50;B=span>600?15:span>240?6:span>90?3:1;const n=Math.ceil(span/B);bo=new Array(n).fill(0);bi=new Array(n).fill(0);
@@ -777,6 +812,7 @@ function drawAbilityTimeline(m,casts,deaths){
     const t=T(x);xh.setAttribute('x1',x);xh.setAttribute('x2',x);xh.setAttribute('visibility','visible');const parts=[`<b style="color:var(--text)">${mmss(t)}</b>`];
     if(m.teamPoints)parts.push(TEAMS.filter(k=>m.teamPoints[k]).map(k=>`<span class="t-${k}">${k}</span> ${fmt(valAt(m.teamPoints[k],t))}`).join(' · '));
     if(m.battleHigh?.length)parts.push(`BH ${fmt(valAt(m.battleHigh,t))}`);
+    if(m.selfShield?.length)parts.push(`<span style="color:var(--dh)">shield ${fmt(valAt(m.selfShield,t))}</span>`);
     if(B){const k=Math.floor((t-w0)/B);parts.push(`<span class="dmg">dealt ${kfmt(bo[k]||0)}</span> / <span class="bad">taken ${kfmt(bi[k]||0)}</span> (${mmss(w0+k*B)}–${mmss(w0+(k+1)*B)})`)}
     const near=casts.filter(c=>Math.abs(c.t-t)<=Math.max(1,span/200)).sort((a,b)=>b.total-a.total);if(near.length)parts.push(near.slice(0,3).map(c=>`${esc(c.name)} ×${c.targets} ${kfmt(c.total)}`).join(', ')+(near.length>3?` <span title="${esc(near.slice(3).map(c=>`${c.name} ×${c.targets} ${kfmt(c.total)}`).join(', '))}">+${near.length-3} more</span>`:''));
     ro.innerHTML=parts.join(' &nbsp;|&nbsp; ')};
@@ -815,6 +851,8 @@ function showCast(m,c,casts){
      <span>· ${c.reflect?`reflected onto ${c.targets} attacker${c.targets>1?'s':''} from ${c.reflectHits||c.hits.length} hit${(c.reflectHits||0)>1?'s':''} on you`:`${c.targets} player${c.targets>1?'s':''} hit`} · <span class="dmg"><b>${fmt(c.total)}</b></span> total${c.ticks?` <span class="dim">(direct ${fmt(c.damage)} + ${c.ticks} tick${c.ticks>1?'s':''} ${fmt(c.tickDamage)}, last tick ${mmss(c.lastTickT)})</span>`:''}${c.shieldDamage?` <span class="dim">· ${fmt(c.shieldDamage)} into shields</span>`:''}${c.targets>1?` · avg ${fmt(c.total/c.targets)}`:''}${c.heal?` · <span class="heal">+${fmt(c.heal)}</span>`:''}${c.crits?` · ${c.crits} crit`:''}${c.kills?` · ⚔ ${c.kills} kill`:''}</span>
      <span class="right flex">${prev?`<button class="btn" data-nav="${casts.indexOf(prev)}">◀ previous ${esc(c.name)}</button>`:''}${next?`<button class="btn" data-nav="${casts.indexOf(next)}">next ▶</button>`:''}</span></div>
     <div class="dim" style="margin:4px 0 4px">${ready}${ready&&c.x!=null?' · ':''}${c.x!=null?`your position X ${c.x} / Z ${c.z}`:''}</div>
+    ${(()=>{const gs=m.selfShield?shieldInfo(m).gains.filter(g=>g.castT!=null&&Math.abs(g.castT-c.t)<.05&&g.source===c.name):[];
+      return gs.length?`<div style="margin:0 0 8px;padding:6px 9px;border-left:3px solid var(--dh);background:rgba(180,156,240,.08)">Granted you <b style="color:var(--dh)">${fmt(sum(gs,g=>g.amount))}</b> shield</div>`:''})()}
     ${accountedFor(m,c,casts)}
     <table><thead><tr><th class="l">${c.reflect?'Attacker':'Player hit'}</th><th class="l">Job</th><th>${c.reflect?'Reflected':'Direct'}</th><th title="Part of Direct that hit a shield">Shield</th><th>Ticks</th><th>Tick Dmg</th><th>Total</th><th class="l">Flags</th><th>HP before</th></tr></thead><tbody>
     ${[...c.hits].sort((a,b)=>(b.dmg+(b.tickDmg||0))-(a.dmg+(a.tickDmg||0))).map(h=>`<tr><td class="l">${h.team?`<span class="t-${h.team}">●</span> `:''}${esc(h.other)}</td><td class="l">${esc(h.job||'')}</td>
@@ -856,6 +894,9 @@ function drawCombat(m){
    <div class="body tiles">${[["Damage dealt",kfmt(dealt),C&&shOut?`${kfmt(shOut)} into shields`:''],["DPS",fmt(dealt/Math.max(1,m.durationSec))],["Damage taken",kfmt(taken),C&&shIn?`${kfmt(shIn)} absorbed by your shields`:''],["Healing done",kfmt(healOut)],
      ["Hits landed",fmt(hitsOut)],["Crit rate",pct(crits/Math.max(1,hitsOut))],["Killing blows",fmt(C?C.filter(c=>c.kind==='death'&&c.dir==='out').length:S.kills)],["Deaths",fmt(C?C.filter(c=>c.kind==='death'&&c.dir==='in').length:S.deaths)]]
      .map(([k,v,sub])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>${sub?`<div class="s">${sub}</div>`:''}</div>`).join('')}</div></section>
+  ${C&&(m.selfShield?.length||out.some(r=>r.kind==='reflect')||inc.some(r=>r.shield))?`<section class="panel"><header><h2>Shields & Reflects</h2><span class="dim">your shields, and damage your statuses (e.g. Chiten) sent back</span></header>
+    <div class="body"><div class="tiles" id="srTiles"></div><div class="grid2" style="margin-top:12px"><div><div class="dim" style="margin-bottom:4px">Shield sources</div><div id="srSources"></div></div>
+    <div><div class="dim" style="margin-bottom:4px">Reflect activations</div><div id="srReflects"></div></div></div></div></section>`:''}
   <section class="panel"><header><h2>Biggest Casts</h2><span class="dim">every target a single cast hit, added together · click for the breakdown</span></header><div class="body" id="topCasts"></div></section>
   <div class="grid2">
    <section class="panel"><header><h2 id="skillTitle">Skills</h2><div class="flex"><button class="btn ${MD.cView==='out'?'on':''}" data-cv="out">Dealt</button><button class="btn ${MD.cView==='in'?'on':''}" data-cv="in">Taken</button></div></header><div class="body" id="cSkills"></div></section>
@@ -867,6 +908,17 @@ function drawCombat(m){
   host.querySelectorAll('[data-cv]').forEach(b=>b.onclick=()=>{MD.cView=b.dataset.cv;MD.cSkill=null;drawCombat(m);bindTips(host)});
   // casts (ability timeline)
   const casts=C?groupCasts(out,C):(S.topCasts||[]);
+  if($('#srTiles')){const si=shieldInfo(m),refl=casts.filter(c=>c.reflect);
+    $('#srTiles').innerHTML=[["Shield gained",kfmt(si.gained),`${si.gains.length} time${si.gains.length===1?'':'s'}`],["Damage your shields absorbed",kfmt(si.absorbed)],["Shield expired unused",kfmt(si.expired)],
+      ["Reflected damage",kfmt(sum(refl,c=>c.total)),`${sum(refl,c=>c.reflectHits||0)} hits reflected`],["Reflect activations",fmt(refl.length)],["Reflect kills",fmt(sum(refl,c=>c.kills))]]
+      .map(([k,v,sub])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div>${sub?`<div class="s">${sub}</div>`:''}</div>`).join('');
+    const src={};si.gains.forEach(g=>{const x=(src[g.source]??={source:g.source,times:0,total:0,biggest:0});x.times++;x.total+=g.amount;x.biggest=Math.max(x.biggest,g.amount)});
+    table($('#srSources'),Object.values(src).map(x=>({...x,avg:x.total/x.times})),[{k:'source',label:'Source',l:1},{k:'times',label:'Times'},{k:'total',label:'Total',def:1,fmt:v=>fmt(v)},{k:'avg',label:'Avg',fmt:kfmt},{k:'biggest',label:'Biggest',fmt:kfmt}],{noscroll:1});
+    if(!si.gains.length)$('#srSources').innerHTML='<div class="empty">No shield gains recorded.</div>';
+    table($('#srReflects'),refl.map(c=>({_c:c,t:c.t,name:c.name,targets:c.targets,hits:c.reflectHits||0,total:c.total,kills:c.kills})),[{k:'t',label:'Time',l:1,fmt:mmss},{k:'name',label:'Status',l:1},
+      {k:'targets',label:'Attackers'},{k:'hits',label:'Hits'},{k:'total',label:'Reflected',def:1,fmt:v=>fmt(v)},{k:'kills',label:'Kills'}],
+      {noscroll:1,sort:'t',dir:1,onClick:r=>{MD.cast=r._c;if(!+MD.atWin)MD.atWin=60;centerWindowOn(m,r._c.t);drawAbilityTimeline(m,casts,deathsOf(C));showCast(m,r._c,casts);$('#atPanel').scrollIntoView({behavior:'smooth'})}});
+    if(!refl.length)$('#srReflects').innerHTML='<div class="empty">No reflected damage recorded.</div>';}
   casts.forEach(c=>{c.total??=c.damage+(c.tickDamage||0)});
   const castStats={};casts.forEach(c=>{const x=(castStats[c.name]??={casts:0,targets:0,maxTargets:0,best:0,tick:0});x.casts++;x.targets+=c.targets;x.maxTargets=Math.max(x.maxTargets,c.targets);x.best=Math.max(x.best,c.total);x.tick+=c.tickDamage||0});
   const idle=C?idleReady(m,casts):{};

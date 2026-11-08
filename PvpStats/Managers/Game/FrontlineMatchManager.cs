@@ -128,7 +128,8 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
                 };
                 if(_combatLogger != null && (Plugin.Configuration.EnableCombatLogFL ?? true)) {
                     _currentMatchTimeline.SelfCombatLog = new();
-                    _combatLogger.Start(_currentMatchTimeline.SelfCombatLog);
+                    _currentMatchTimeline.SelfShield = new();
+                    _combatLogger.Start(_currentMatchTimeline.SelfCombatLog, _currentMatchTimeline.SelfShield);
                 }
             }
             Plugin.Log.Information($"Starting new match on {CurrentMatch.Arena}");
@@ -311,6 +312,7 @@ internal class FrontlineMatchManager : MatchManager<FrontlineMatch> {
         }
 #endif
 
+        _combatLogger?.SampleSelfShield();
         var objectTable = Plugin.ObjectTable;
         bool scanPlayers = now - _lastPlayerScan >= PlayerScanInterval;
         if(scanPlayers) _lastPlayerScan = now;
