@@ -20,7 +20,7 @@ using System.Threading.Tasks;
 namespace PvpStats;
 
 public sealed class Plugin : IDalamudPlugin {
-    public string Name => "FLStatsPlus";
+    public string Name => "FLStatsPlusTest";
 
     internal const string DatabaseName = "data.db";
 

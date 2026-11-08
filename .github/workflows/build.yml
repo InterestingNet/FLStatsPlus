@@ -8,7 +8,7 @@ name: Build
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, ui-test]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -67,7 +67,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: FLStatsPlus
+          name: ${{ github.ref_name == 'ui-test' && 'FLStatsPlusTest' || 'FLStatsPlus' }}
           path: out/latest.zip
           if-no-files-found: error
 

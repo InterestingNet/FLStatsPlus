@@ -7,12 +7,12 @@ namespace PvpStats;
 /// </summary>
 internal static class BuildFlavor {
     /// <summary>Appended to window titles (test build: " [TEST]").</summary>
-    internal const string TitleSuffix = "";
+    internal const string TitleSuffix = " [TEST]";
     /// <summary>Prefix for all slash commands (test build: "/flpt").</summary>
-    internal const string CommandPrefix = "/flp";
+    internal const string CommandPrefix = "/flpt";
     /// <summary>
     /// If set, and this install has no database yet, copy the database of the install with this internal
     /// name on first start (test build: "FLStatsPlus", so it starts with your real match history).
     /// </summary>
-    internal static readonly string? SeedDatabaseFrom = null;
+    internal static readonly string? SeedDatabaseFrom = "FLStatsPlus";
 }

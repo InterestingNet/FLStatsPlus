@@ -1,12 +1,12 @@
 {
   "Author": "SaMo (PvpStats) / FLStatsPlus contributors",
-  "Name": "FLStats Plus",
-  "Punchline": "PvP match history and stats tracker with combat logs and HTML export.",
+  "Name": "FLStats Plus (Test)",
+  "Punchline": "TEST BUILD of FLStats Plus for trying UI changes. Uses its own data and /flpt commands.",
   "Description": "Fork of PvP Tracker (PvpStats) by SaMo. Records Crystalline Conflict, Frontline and Rival Wings match history and stats, adds a Frontline personal combat log (every skill you hit with and every hit you took) and exports matches and history to self-contained HTML reports, JSON and CSV.",
-  "InternalName": "FLStatsPlus",
+  "InternalName": "FLStatsPlusTest",
   "RepoUrl": "",
   "ApplicableVersion": "any",
-  "Changelog": "* Initial fork: Frontline self combat log, HTML/JSON/CSV export.",
+  "Changelog": "* Test build (branch ui-test).",
   "Tags": [
     "pvp",
     "statistics"
