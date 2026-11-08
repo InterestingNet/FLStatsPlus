@@ -685,8 +685,20 @@ function centerWindowOn(m,t){if(!+MD.atWin||+MD.atWin>=m.durationSec)return;cons
 /* Integrated Match Timeline: team points, Battle High, your damage dealt/taken and one lane per ability, all on one
    time axis with one zoom window. Deaths/kills cut across every track. Works without a combat log (first two tracks). */
 function valAt(series,t){let v=0;for(const p of series){if(p[0]<=t)v=p[1];else break}return v}
+let _atArgs=null;
+function deselectCast(){
+  if(!MD.cast)return;MD.cast=null;const cd=$('#castDetail');if(cd)cd.innerHTML='';
+  if(_atArgs&&$('#atl'))drawAbilityTimeline(..._atArgs);
+}
+// click on empty space (anything that isn't a bubble, button, input, link, clickable row or the breakdown) clears the selection
+document.addEventListener('click',e=>{
+  if(!MD.cast)return;
+  if(e.target.closest('.cast,.death,#castDetail,button,select,input,label,a,tr.click,[data-csv]'))return;
+  deselectCast();
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')deselectCast()});
 function drawAbilityTimeline(m,casts,deaths){
-  const host=$('#atl');if(!host)return;
+  const host=$('#atl');if(!host)return;_atArgs=[m,casts,deaths];
   const C=m.combat;
   const set=(id,v)=>{const e=$(id);if(e)e.value=v};
   set('#atWin',MD.atWin);set('#atMin',MD.atMin);set('#atPos',MD.atPos);if($('#atPos'))$('#atPos').disabled=!+MD.atWin;
@@ -758,7 +770,7 @@ function drawAbilityTimeline(m,casts,deaths){
         <text x="${lx}" y="${ly-1}" text-anchor="middle" style="fill:var(--gold2);font-size:11px;font-weight:600">${esc(lab)}</text></g>`}});
   // hover crosshair
   g+=`<line id="xh" x1="0" x2="0" y1="6" y2="${H-18}" stroke="var(--gold2)" stroke-opacity=".5" visibility="hidden" pointer-events="none"/>`;
-  host.innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>${tracks.length||lanes.length?'':'<div class="empty">No timeline data for this match.</div>'}`;
+  host.innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}" style="cursor:${MD.cast?'pointer':'default'}" ${MD.cast?'title="Click empty space to deselect"':''}>${g}</svg>${tracks.length||lanes.length?'':'<div class="empty">No timeline data for this match.</div>'}`;
   const svg=host.querySelector('svg'),xh=host.querySelector('#xh'),ro=$('#atReadout');
   svg.onmousemove=e=>{const r=svg.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*W;if(x<LW||x>W-8){xh.setAttribute('visibility','hidden');return}
     const t=T(x);xh.setAttribute('x1',x);xh.setAttribute('x2',x);xh.setAttribute('visibility','visible');const parts=[`<b style="color:var(--text)">${mmss(t)}</b>`];
@@ -768,7 +780,8 @@ function drawAbilityTimeline(m,casts,deaths){
     const near=casts.filter(c=>Math.abs(c.t-t)<=Math.max(1,span/200)).sort((a,b)=>b.total-a.total);if(near.length)parts.push(near.slice(0,3).map(c=>`${esc(c.name)} ×${c.targets} ${kfmt(c.total)}`).join(', ')+(near.length>3?` <span title="${esc(near.slice(3).map(c=>`${c.name} ×${c.targets} ${kfmt(c.total)}`).join(', '))}">+${near.length-3} more</span>`:''));
     ro.innerHTML=parts.join(' &nbsp;|&nbsp; ')};
   svg.onmouseleave=()=>xh.setAttribute('visibility','hidden');
-  host.querySelectorAll('.cast').forEach(n=>n.onclick=()=>{MD.cast=casts[+n.dataset.ci];drawAbilityTimeline(m,casts,deaths);showCast(m,MD.cast,casts)});
+  host.querySelectorAll('.cast').forEach(n=>n.onclick=()=>{const c=casts[+n.dataset.ci];if(MD.cast===c){deselectCast();return}
+    MD.cast=c;drawAbilityTimeline(m,casts,deaths);showCast(m,MD.cast,casts)});
   host.querySelectorAll('.death').forEach(n=>n.onclick=()=>showDeath(m,deaths[+n.dataset.di]));
   bindTips(host);
   const redraw=()=>drawAbilityTimeline(m,casts,deaths),on=(id,ev,f)=>{const e=$(id);if(e)e[ev]=f};
