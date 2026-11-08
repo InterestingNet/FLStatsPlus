@@ -31,6 +31,7 @@ This one format is used by the HTML report (embedded in `<script id="report-data
 | battleHigh | `[[t, battleHighPoints], ...]` | your Battle High points over time (Battle High V at 100) |
 | combatSummary | CombatSummary | per-match rollup of your combat log |
 | actions | `{ actionId: { name, recastSec, maxCharges, icon } }` | cooldown info for the ability timeline |
+| combatGz | HTML history reports: `combat` as gzip-compressed JSON, base64-encoded (unpacked when the match is opened) |
 | combat | CombatEntry[] | raw combat log (single-match reports, JSON exports, small history reports) |
 
 **Team**: `placement` (0 = 1st), `totalPoints`, `killPoints`, `deathPointLosses`, `occupationPoints`, `targetablePoints` (ice / tomeliths), `dronePoints`.

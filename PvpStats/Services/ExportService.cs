@@ -79,15 +79,25 @@ internal class ExportService {
         return Task.Run<string?>(() => {
             var list = matches.Where(IsExportable).OrderBy(x => x.DutyStartTime).ToList();
             if(list.Count == 0) return null;
-            // raw logs make large reports; history keeps per-match combat rollups instead,
-            // unless the selection is small enough to embed everything
-            bool raw = list.Count <= 25;
+            // every match keeps its full combat log, gzip-compressed (the report unpacks a match when you open it)
             var report = new ReportDto {
                 Mode = "history",
-                Matches = list.Select(m => BuildMatch(m, _plugin.FLCache.GetTimeline(m), raw)).ToList(),
+                Matches = list.Select(m => PackCombat(BuildMatch(m, _plugin.FLCache.GetTimeline(m), true))).ToList(),
             };
             return WriteHtml(report, $"FL_history_{Stamp(DateTime.UtcNow)}_{list.Count}matches.html");
         });
+    }
+
+    /// <summary>Moves the raw combat log into <see cref="MatchDto.CombatGz"/> (gzip + base64) to keep HTML reports small.</summary>
+    private static MatchDto PackCombat(MatchDto dto) {
+        if(dto.Combat == null) return dto;
+        using var ms = new MemoryStream();
+        using(var gz = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionLevel.Optimal, leaveOpen: true)) {
+            JsonSerializer.Serialize(gz, dto.Combat, JsonOptions);
+        }
+        dto.CombatGz = Convert.ToBase64String(ms.ToArray());
+        dto.Combat = null;
+        return dto;
     }
 
     internal Task<string?> ExportFrontlineJson(IEnumerable<FrontlineMatch> matches) {
@@ -505,6 +515,8 @@ internal class ExportService {
         public List<double[]>? BattleHigh { get; set; }
         public CombatSummaryDto? CombatSummary { get; set; }
         public List<CombatDto>? Combat { get; set; }
+        /// <summary>HTML history reports: <see cref="Combat"/> as gzip-compressed JSON, base64. Unpacked when the match is opened.</summary>
+        public string? CombatGz { get; set; }
         /// <summary>action id → recast / charges, for the cooldown lanes in the ability timeline</summary>
         public Dictionary<string, ActionMetaDto>? Actions { get; set; }
     }

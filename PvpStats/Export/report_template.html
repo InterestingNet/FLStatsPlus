@@ -515,14 +515,26 @@ function viewCombat(v,ms){
   const best=withLog.flatMap(m=>(m.combatSummary.topCasts||[]).map(c=>{const total=c.total??c.damage+(c.tickDamage||0);return{...c,total,m,map:m.mapName,when:m._t,avg:total/Math.max(1,c.targets)}}));
   table($('#cBest'),best,[{k:'when',label:'Match',l:1,fmt:(v,r)=>`${dt(v)} · ${esc(r.map)}`},{k:'t',label:'At',fmt:mmss},{k:'name',label:'Skill',l:1},{k:'targets',label:'Players Hit'},
     {k:'damage',label:'Direct',fmt:v=>fmt(v)},{k:'tickDamage',label:'Tick Dmg',fmt:v=>v?fmt(v):''},{k:'total',label:'Total',def:1,fmt:v=>`<b>${fmt(v)}</b>`},{k:'avg',label:'Avg / Target',fmt:kfmt},{k:'kills',label:'Kills'}],
-    {onClick:r=>{openMatch(r.m);setTimeout(()=>{const C=r.m.combat;if(!C)return;const cs=groupCasts(C.filter(c=>c.dir==='out'&&c.kind!=='death'),C);const hit=cs.find(c=>Math.abs(c.t-r.t)<.05&&c.name===r.name);
-      if(hit){MD.cast=hit;MD.atWin=120;centerWindowOn(r.m,hit.t);drawAbilityTimeline(r.m,cs,deathsOf(C));showCast(r.m,hit,cs);$('#atPanel').scrollIntoView({behavior:'smooth'})}},50)}});
+    {onClick:r=>{openMatch(r.m);ensureCombat(r.m).then(()=>setTimeout(()=>{const C=r.m.combat;if(!C)return;const cs=groupCasts(C.filter(c=>c.dir==='out'&&c.kind!=='death'),C);const hit=cs.find(c=>Math.abs(c.t-r.t)<.05&&c.name===r.name);
+      if(hit){MD.cast=hit;MD.atWin=120;centerWindowOn(r.m,hit.t);drawAbilityTimeline(r.m,cs,deathsOf(C));showCast(r.m,hit,cs);$('#atPanel').scrollIntoView({behavior:'smooth'})}},50))}});
 }
 
+/* Full combat logs in history reports are stored gzip+base64 (combatGz) and unpacked when a match is opened. */
+const _unpacking=new Map();
+function ensureCombat(m){
+  if(m.combat||!m.combatGz)return Promise.resolve();
+  if(_unpacking.has(m))return _unpacking.get(m);
+  const p=(async()=>{const bin=Uint8Array.from(atob(m.combatGz),c=>c.charCodeAt(0));
+    const txt=await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+    m.combat=JSON.parse(txt);})().catch(e=>{console.error('could not unpack combat log',e);m.combatGz=null});
+  _unpacking.set(m,p);return p;
+}
 /* ─────────── Match detail ─────────── */
 const MD={totals:true,pct:false,teamFirst:true,cView:'out',cSkill:null,cDir:'all',cText:'',atWin:0,atPos:0,atCd:true,atTicks:true,atMin:1,cast:null};
 function viewMatch(v){
   const m=SEL;if(!m){v.innerHTML='<div class="empty">Select a match.</div>';return}
+  if(m.combatGz&&!m.combat){v.innerHTML='<section class="panel"><div class="empty">Unpacking combat log…</div></section>';
+    ensureCombat(m).then(()=>{if(SEL===m&&VIEW==='match'){viewMatch(v);bindTips(v)}});return}
   const you=m._you,order=[...TEAMS].sort((a,b)=>(m.teams[a]?.placement??9)-(m.teams[b]?.placement??9));
   const idx=ALL.indexOf(m);
   v.innerHTML=`
@@ -906,7 +918,7 @@ $('#mergeFile').onchange=async e=>{
     if(!ex){ALL.push(m);have.set(m._key,m);added++;continue}
     // same match seen by another character/database: keep ours, fill in missing data
     if(!ex.teamPoints&&m.teamPoints){ex.teamPoints=m.teamPoints;enriched++}
-    if(!ex.combat&&m.combat&&m.localPlayer===ex.localPlayer){ex.combat=m.combat;ex.combatSummary=m.combatSummary;enriched++}}
+    if(!ex.combat&&!ex.combatGz&&(m.combat||m.combatGz)&&m.localPlayer===ex.localPlayer){ex.combat=m.combat;ex.combatGz=m.combatGz;ex.combatSummary=m.combatSummary;enriched++}}
   ALL.sort((a,b)=>a._t-b._t);buildFilters();refresh();e.target.value='';
   alert(`Merged ${f.name}: ${added} new match(es), ${enriched} enriched. Duplicates (same map & start minute) were skipped.`);
 };

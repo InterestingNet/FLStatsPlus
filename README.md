@@ -58,7 +58,7 @@ Tabs, all with the same filters (map, your job, result, dates, tags, favorites, 
 
 **Merge export…** loads another FLStats Plus export (for example from another character) into the same view.
 
-A history report embeds the raw combat log when it has 25 matches or fewer. Above that it embeds per-match combat summaries only, to keep the file small. Single-match reports always include the full log.
+Every report includes each match's full combat log. History reports store the logs compressed (about 150 KB per match), and a log is unpacked when you open its match.
 
 ## Reflected damage (Chiten etc.)
 
