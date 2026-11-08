@@ -58,7 +58,12 @@ Tabs, all with the same filters (map, your job, result, dates, tags, favorites, 
 
 **Merge export…** loads another FLStats Plus export (for example from another character) into the same view.
 
-Every report includes each match's full combat log. History reports store the logs compressed (about 150 KB per match), and a log is unpacked when you open its match.
+Every report includes each match's full combat log. History reports store the logs compressed (about 150 KB per match), and a log is unpacked when you open its match. Downloads from a report always contain the whole thing, uncompressed:
+
+- **Download JSON**: every filtered match with its full combat log.
+- **Download CSV**: the full scoreboards.
+- **Download combat log CSV**: every hit from every filtered match in one file.
+- **Match JSON** and **Combat log CSV**: the same, for one match.
 
 ## Reflected damage (Chiten etc.)
 

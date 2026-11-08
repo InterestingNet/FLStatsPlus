@@ -127,7 +127,7 @@ internal class ExportService {
                 "alliance", "is_you", "kills", "deaths", "assists", "damage_dealt", "damage_to_pcs", "damage_to_other", "damage_taken", "hp_restored",
                 "special", "occupations", "claim_time_s", "max_battle_high"));
             var combat = new StringBuilder();
-            combat.AppendLine(Csv("match_id", "start_utc", "map", "t_s", "direction", "kind", "skill", "other", "other_job", "other_team", "damage", "heal",
+            combat.AppendLine(Csv("match_id", "start_utc", "map", "t_s", "direction", "kind", "skill", "other", "other_job", "other_team", "damage", "shield", "heal",
                 "mp_drain", "crit", "direct_hit", "blocked", "parried", "missed", "invulnerable", "killing_blow", "pet"));
             foreach(var m in list) {
                 var dto = BuildMatch(m, _plugin.FLCache.GetTimeline(m), true);
@@ -138,7 +138,7 @@ internal class ExportService {
                         p.DamageTaken, p.HpRestored, p.Special, p.Occupations, p.ClaimTimeSec, p.MaxBattleHigh));
                 }
                 foreach(var c in dto.Combat ?? []) {
-                    combat.AppendLine(Csv(dto.Id, dto.Start, dto.MapName, c.T, c.Dir, c.Kind, c.Name, c.Other, c.OtherJob, c.OtherTeam, c.Dmg, c.Heal,
+                    combat.AppendLine(Csv(dto.Id, dto.Start, dto.MapName, c.T, c.Dir, c.Kind, c.Name, c.Other, c.OtherJob, c.OtherTeam, c.Dmg, c.Shield, c.Heal,
                         c.MpDrain, c.Crit, c.Dh, c.Blocked, c.Parried, c.Miss, c.Invuln, c.Kb, c.Pet));
                 }
             }

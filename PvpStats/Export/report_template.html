@@ -85,7 +85,8 @@ footer{color:var(--dim);font-size:11px;text-align:center;margin-top:26px}
     <div><h1>FLStats Plus</h1><div class="sub" id="subtitle"></div></div>
     <div class="flex">
       <button class="btn" id="btnJson" title="Download the filtered matches as JSON">Download JSON</button>
-      <button class="btn" id="btnCsv" title="Download the filtered scoreboards as CSV">Download CSV</button>
+      <button class="btn" id="btnCsv" title="Download the filtered scoreboards (all players) as CSV">Download CSV</button>
+      <button class="btn" id="btnCombatCsv" title="Download every hit from your combat logs in the filtered matches as CSV">Download combat log CSV</button>
       <label class="btn" title="Combine another FLStats Plus export (e.g. another character) into this view">Merge export…<input type="file" id="mergeFile" accept=".html,.json" hidden></label>
     </div>
   </div>
@@ -569,7 +570,7 @@ function viewMatch(v){
   <div id="combatHost"></div>`;
   if(idx>0)$('#prevM')&&($('#prevM').onclick=()=>openMatch(ALL[idx-1]));
   if(idx<ALL.length-1)$('#nextM')&&($('#nextM').onclick=()=>openMatch(ALL[idx+1]));
-  $('#mJson').onclick=()=>{dl(`FL_${m.mapName.replace(/\W/g,'')}_${m.start.slice(0,16).replace(/\D/g,'')}.json`,JSON.stringify(stripPriv(m),null,1),'application/json')};
+  $('#mJson').onclick=e=>busy(e.target,async()=>{const[full]=await fullMatches([m]);dl(`FL_${m.mapName.replace(/\W/g,'')}_${m.start.slice(0,16).replace(/\D/g,'')}.json`,JSON.stringify(full,null,1),'application/json')});
   if(m.combat)$('#mCsv').onclick=()=>dl(`FL_combat_${m.start.slice(0,16).replace(/\D/g,'')}.csv`,combatCsv(m),'text/csv');
 
   // team points table
@@ -591,6 +592,10 @@ function viewMatch(v){
   if(!m.combat)drawAbilityTimeline(m,[],[]);
 }
 function stripPriv(m){const o={};for(const k in m)if(!k.startsWith('_'))o[k]=m[k];return o}
+/* Downloads always contain the whole thing: unpack compressed logs and write them out as plain JSON. */
+async function fullMatches(ms){await Promise.all(ms.map(ensureCombat));
+  return ms.map(m=>{const o=stripPriv(m);delete o.combatGz;if(m.combat)o.combat=m.combat.map(c=>{const r={};for(const k in c)if(!k.startsWith('_'))r[k]=c[k];return r});return o})}
+async function busy(btn,fn){const t=btn.textContent;btn.disabled=true;btn.textContent='Preparing…';try{await fn()}finally{btn.disabled=false;btn.textContent=t}}
 function drawScoreboard(m,order){
   const grp=MD.group||'team',tt=m._teamTot;
   const isWT=m.mapType==="Triumph";
@@ -820,8 +825,8 @@ function accountedFor(m,c,casts){
   return `<div style="margin:0 0 8px;padding:6px 9px;border-left:3px solid var(--gold);background:rgba(79,143,217,.08)"><span class="dim">Accounted for:</span> ${parts.join(' · ')}</div>`;
 }
 function combatCsv(m){
-  const h=["t_s","direction","kind","skill","other","other_job","other_team","damage","heal","mp_drain","crit","direct_hit","blocked","parried","missed","invulnerable","killing_blow","pet"];
-  return [csvRow(h),...m.combat.map(c=>csvRow([c.t,c.dir,c.kind,c.name,c.other,c.otherJob,c.otherTeam,c.dmg||0,c.heal||0,c.mpDrain||0,!!c.crit,!!c.dh,!!c.blocked,!!c.parried,!!c.miss,!!c.invuln,!!c.kb,!!c.pet]))].join("\n");
+  const h=["t_s","direction","kind","skill","other","other_job","other_team","damage","shield","heal","mp_drain","crit","direct_hit","blocked","parried","missed","invulnerable","killing_blow","pet"];
+  return [csvRow(h),...m.combat.map(c=>csvRow([c.t,c.dir,c.kind,c.name,c.other,c.otherJob,c.otherTeam,c.dmg||0,c.shield||0,c.heal||0,c.mpDrain||0,!!c.crit,!!c.dh,!!c.blocked,!!c.parried,!!c.miss,!!c.invuln,!!c.kb,!!c.pet]))].join("\n");
 }
 function drawCombat(m){
   const C=m.combat,S=m.combatSummary;const host=$('#combatHost');
@@ -904,7 +909,14 @@ function drawCombat(m){
 }
 
 /* ═══════════════════════════ downloads & merge ═══════════════════════════ */
-$('#btnJson').onclick=()=>{const ms=VIEW==='match'&&SEL?[SEL]:filtered();dl(`flstats_${ms.length}matches.json`,JSON.stringify({...R,matches:ms.map(stripPriv)},null,1),'application/json')};
+$('#btnJson').onclick=e=>busy(e.target,async()=>{const ms=VIEW==='match'&&SEL?[SEL]:filtered();const{open,...rest}=R;
+  dl(`flstats_${ms.length}matches.json`,JSON.stringify({...rest,matches:await fullMatches(ms)},null,1),'application/json')});
+$('#btnCombatCsv').onclick=e=>busy(e.target,async()=>{const ms=VIEW==='match'&&SEL?[SEL]:filtered();await Promise.all(ms.map(ensureCombat));
+  const h=["match_id","match_start","map","t_s","direction","kind","skill","other","other_job","other_team","damage","shield","heal","mp_drain","crit","direct_hit","blocked","parried","missed","invulnerable","killing_blow","pet","x","z"];
+  const rows=[csvRow(h)];let n=0;
+  for(const m of ms)for(const c of m.combat||[]){n++;rows.push(csvRow([m.id,m.start,m.mapName,c.t,c.dir,c.kind,c.name,c.other,c.otherJob,c.otherTeam,c.dmg||0,c.shield||0,c.heal||0,c.mpDrain||0,!!c.crit,!!c.dh,!!c.blocked,!!c.parried,!!c.miss,!!c.invuln,!!c.kb,!!c.pet,c.x??'',c.z??'']))}
+  if(!n){alert('No combat logs in the selected matches.');return}
+  dl(`flstats_combatlog_${ms.length}matches.csv`,rows.join("\n"),'text/csv')});
 $('#btnCsv').onclick=()=>{const ms=VIEW==='match'&&SEL?[SEL]:filtered();
   const h=["match_id","start","map","mode","duration_s","team","team_placement","team_points","player","world","job","alliance","is_you","kills","deaths","assists","damage_dealt","damage_to_pcs","damage_to_other","damage_taken","hp_restored","special","occupations","claim_time_s","max_battle_high"];
   const rows=[csvRow(h)];ms.forEach(m=>m.players.forEach(p=>{const t=m.teams[p.team]||{};rows.push(csvRow([m.id,m.start,m.mapName,m.mapType,m.durationSec,p.team,t.placement!=null?t.placement+1:'',t.totalPoints,p.name,p.world,p.job,ALLI[p.alliance],p.isYou,p.kills,p.deaths,p.assists,p.damageDealt,p.damageToPCs,p.damageToOther,p.damageTaken,p.hpRestored,p.special,p.occupations,p.claimTimeSec,p.maxBattleHigh??'']))}));
