@@ -1,4 +1,4 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Interface.GameFonts;
 using Dalamud.Interface.ManagedFontAtlas;
@@ -64,7 +64,16 @@ internal class WindowManager : IDisposable {
         _plugin.ClientState.Login += OnLogin;
     }
     private void DrawUI() {
-        WindowSystem.Draw();
+        if(!BuildFlavor.UseReportTheme) {
+            WindowSystem.Draw();
+            return;
+        }
+        Theme.Push();
+        try {
+            WindowSystem.Draw();
+        } finally {
+            Theme.Pop();
+        }
     }
 
     public void Dispose() {

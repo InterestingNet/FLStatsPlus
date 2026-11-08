@@ -15,4 +15,6 @@ internal static class BuildFlavor {
     /// name on first start (test build: "FLStatsPlus", so it starts with your real match history).
     /// </summary>
     internal static readonly string? SeedDatabaseFrom = "FLStatsPlus";
+    /// <summary>Draw every plugin window with the blue theme from the HTML reports (see Helpers/Theme.cs).</summary>
+    internal const bool UseReportTheme = true;
 }
