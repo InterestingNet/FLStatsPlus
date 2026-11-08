@@ -170,7 +170,27 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
         if(me != null) {
             entry.SelfX = me.Position.X;
             entry.SelfZ = me.Position.Z;
+            if(entry.Heal > 0 && entry.Direction != CombatDirection.Dealt) {
+                entry.SelfHp = me.CurrentHp;
+                entry.SelfMaxHp = me.MaxHp;
+            }
         }
+    }
+
+    // your statuses that make heals happen on their own (lifesteal, heal when hit)
+    private static readonly string[] HealProcStatusNames = ["Bloodbath", "Chiten"];
+
+    /// <summary>Names of your active heal-producing statuses, e.g. "Bloodbath + Chiten", or null.</summary>
+    private string? ActiveProcStatuses() {
+        var me = _plugin.ObjectTable.LocalPlayer;
+        if(me == null) return null;
+        List<string>? found = null;
+        foreach(var st in me.StatusList) {
+            if(st.StatusId == 0) continue;
+            var name = StatusInfo(st.StatusId).Name;
+            if(Array.IndexOf(HealProcStatusNames, name) >= 0 && (found == null || !found.Contains(name))) (found ??= []).Add(name);
+        }
+        return found == null ? null : string.Join(" + ", found);
     }
 
     private uint LocalId => _localId;
@@ -281,6 +301,19 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                 FillOther(entry, casterIsSelf ? target : ResolveOwner(caster));
 
                 bool any = false, hadDamage = false;
+                // a heal on you inside an enemy's hit is yours (e.g. Bloodbath with Chiten), not the enemy healing you
+                bool hostileHitOnMe = false;
+                if(!casterIsSelf && targetIsSelf) {
+                    for(var k = 0; k < 8; k++) {
+                        ref var pre = ref effects[i].Effects[k];
+                        if(pre.Type is (byte)ActionEffectType.Damage or (byte)ActionEffectType.BlockedDamage or (byte)ActionEffectType.ParriedDamage
+                            && (pre.Param4 & 0x80) == 0) {
+                            hostileHitOnMe = true;
+                            break;
+                        }
+                    }
+                }
+                CombatLogEntry? selfProc = null;
                 for(var j = 0; j < 8; j++) {
                     ref var fx = ref effects[i].Effects[j];
                     if(fx.Type == 0) continue;
@@ -302,6 +335,9 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                         } else {
                             continue; // the attacker's own lifesteal / heals off of you are not your stat
                         }
+                    } else if(hostileHitOnMe && fx.Type == (byte)ActionEffectType.Heal) {
+                        selfProc ??= SelfProcEntry(entry, header->GlobalSequence);
+                        e = selfProc;
                     }
                     switch((ActionEffectType)fx.Type) {
                         case ActionEffectType.Miss:
@@ -320,6 +356,11 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                         case ActionEffectType.Heal:
                             e.Heal += amount;
                             e.Crit |= (fx.Param1 & 0x20) == 0x20;
+                            if(reflected && e != entry && e.Direction == CombatDirection.Self) {
+                                // lifesteal off your own hit
+                                e.Lifesteal = true;
+                                e.Via ??= ActiveProcStatuses();
+                            }
                             any = true; break;
                         case ActionEffectType.MpLoss:
                             e.MpDrain += amount; any = true; break;
@@ -347,6 +388,9 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
                         Add(e);
                     }
                 }
+                if(selfProc != null && selfProc.Heal > 0) {
+                    Add(selfProc);
+                }
                 if(any) {
                     if(hadDamage && entry.Direction != CombatDirection.Self) {
                         TrackShield(entry, targetIsSelf ? _plugin.ObjectTable.LocalPlayer : target, header->GlobalSequence);
@@ -360,6 +404,24 @@ internal unsafe class FrontlineCombatLogger : IDisposable {
             if(t0 != 0) _hookTicks += Stopwatch.GetTimestamp() - t0;
             _actionEffectHook!.Original(casterEntityId, casterPtr, targetPos, header, effects, targetIds);
         }
+    }
+
+    /// <summary>A Self entry for a heal your statuses produced when <paramref name="attackerHit"/> landed on you.</summary>
+    private CombatLogEntry SelfProcEntry(CombatLogEntry attackerHit, uint seq) {
+        var via = ActiveProcStatuses();
+        return new CombatLogEntry {
+            Timestamp = attackerHit.Timestamp,
+            Direction = CombatDirection.Self,
+            Kind = CombatEntryKind.Action,
+            ActionName = (via ?? "Heal") + " (when hit)",
+            Via = via,
+            Lifesteal = true,
+            GlobalSequence = seq,
+            // who hit you and set it off
+            Other = attackerHit.Other,
+            OtherIsPlayer = attackerHit.OtherIsPlayer,
+            OtherClassJobId = attackerHit.OtherClassJobId,
+        };
     }
 
     private static readonly string[] ReflectStatusNames = ["Chiten"];

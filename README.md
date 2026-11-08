@@ -65,6 +65,23 @@ Every report includes each match's full combat log. History reports store the lo
 - **Download combat log CSV**: every hit from every filtered match in one file.
 - **Match JSON** and **Combat log CSV**: the same, for one match.
 
+## Healing
+
+Each match has a **Healing** section:
+
+- **Totals:** healing done (on yourself / on teammates), healing received from teammates, estimated overheal, and lifesteal & procs.
+- **Your heals on yourself, by source**, each with heals, total, average, crit %, overheal and overheal %. This covers:
+  - skills such as Zanshin and Hyosetsu;
+  - Recuperate and potions;
+  - heal-over-time ticks;
+  - Bloodbath lifesteal, listed per skill, e.g. "Bloodbath (lifesteal on Hyosetsu)";
+  - heals that fire when you're hit, e.g. "Bloodbath + Chiten (when hit)".
+- **Teammates you healed** and **healing you received from teammates**.
+- A **Healing** track on the Match Timeline: your healing up, healing received down.
+- The **Combat** tab totals all of this across matches.
+
+Heals that fire when an enemy hits you arrive inside that enemy's hit. The plugin records them as **your** self-heal, labelled with the heal-producing statuses you had active (Bloodbath, Chiten). Recordings made before this update stored them as healing *from* the enemy; the report detects those and lists them as "Heal (when hit)". Overheal is estimated from your HP right before each heal, which is recorded from this update on.
+
 ## Your shields
 
 The plugin records your shield whenever it changes, reading it straight from game memory each frame with no allocations. In the report:

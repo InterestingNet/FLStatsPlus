@@ -498,6 +498,8 @@ function viewCombat(v,ms){
     <section class="panel"><header><h2>Damage & Kills by Enemy Job</h2></header><div class="body" id="cJobOut"></div></section>
     <section class="panel"><header><h2>Damage Taken & Deaths by Enemy Job</h2></header><div class="body" id="cJobIn"></div></section>
    </div>
+   <section class="panel"><header><h2>Healing — all logged matches</h2></header><div class="body"><div class="tiles" id="cHL"></div>
+     <div style="margin-top:12px"><div class="dim" style="margin-bottom:4px">Your heals on yourself, by source</div><div id="cHLsrc"></div></div></div></section>
    <section class="panel"><header><h2>Shields & Reflects — all logged matches</h2></header><div class="body"><div class="tiles" id="cSR"></div>
      <div class="grid2" style="margin-top:12px"><div><div class="dim" style="margin-bottom:4px">Shield sources</div><div id="cSRsrc"></div></div><div><div class="dim" style="margin-bottom:4px">Reflects by status</div><div id="cSRref"></div></div></div></div></section>
    <section class="panel"><header><h2>Best Casts — all logged matches</h2><span class="dim">your biggest single uses of a skill (all players hit, added together) · click to open the match</span></header><div class="body" id="cBest"></div></section>
@@ -515,6 +517,12 @@ function viewCombat(v,ms){
   table($('#cJobOut'),byJob(targets),jc);table($('#cJobIn'),byJob(sources),jc);
   const oc=[{k:'name',label:'Player',l:1,fmt:(v,r)=>`${r.team?`<span class="t-${r.team}">●</span> `:''}${esc(v)}`},{k:'job',label:'Job',l:1},{k:'matches',label:'Matches'},{k:'hits',label:'Hits'},{k:'damage',label:'Damage',def:1,fmt:kfmt},{k:'killingBlows',label:'KB'}];
   table($('#cTargets'),targets,oc);table($('#cSources'),sources,oc);
+  {const S_=withLog.map(m=>m.combatSummary),hasNew=S_.some(s=>s.healSelf!=null);
+    const selfHeal=hasNew?sum(S_,s=>s.healSelf||0):sum(withLog.flatMap(m=>m.combatSummary.selfSkills||[]),r=>r.heal||0);
+    $('#cHL').innerHTML=[["Healing on yourself",kfmt(selfHeal)],["On teammates",hasNew?kfmt(sum(S_,s=>s.healToOthers||0)):'—'],["Received from teammates",hasNew?kfmt(sum(S_,s=>s.healReceived||0)):'—'],["Overheal (est.)",hasNew?kfmt(sum(S_,s=>s.overheal||0)):'—']]
+      .map(([k,v])=>`<div class="tile"><div class="k">${k}</div><div class="v heal">${v}</div></div>`).join('');
+    const hs={};S_.forEach(s=>(s.healSources||(s.selfSkills||[]).filter(r=>r.heal).map(r=>({source:r.kind==='hot'?r.name+' (HoT)':r.name,hits:r.hits,total:r.heal,overheal:0,crits:r.crits}))).forEach(r=>{const x=(hs[r.source]??={source:r.source,hits:0,total:0,overheal:0,crits:0,matches:0});x.hits+=r.hits;x.total+=r.total;x.overheal+=r.overheal||0;x.crits+=r.crits||0;x.matches++}));
+    table($('#cHLsrc'),Object.values(hs).map(x=>({...x,avg:x.total/x.hits,cr:x.crits/x.hits})),[{k:'source',label:'Source',l:1},{k:'matches',label:'Matches'},{k:'hits',label:'Heals'},{k:'total',label:'Total',def:1,fmt:kfmt},{k:'avg',label:'Avg',fmt:kfmt},{k:'cr',label:'Crit',fmt:v=>pct(v)},{k:'overheal',label:'Overheal',fmt:v=>hasNew?kfmt(v):'—'}],{noscroll:1});}
   {const S_=withLog.map(m=>m.combatSummary);
     $('#cSR').innerHTML=[["Shield gained",kfmt(sum(S_,s=>s.shieldGained||0))],["Damage your shields absorbed",kfmt(sum(S_,s=>s.shieldAbsorbedOnYou||0))],["Shield expired unused",kfmt(sum(S_,s=>s.shieldExpired||0))],
       ["Reflected damage",kfmt(sum(S_,s=>s.reflected||0))],["Hits reflected",fmt(sum(S_,s=>s.reflectHits||0))],["Reflect kills",fmt(sum(S_,s=>s.reflectKills||0))]]
@@ -572,7 +580,7 @@ function viewMatch(v){
      <button class="btn ${MD.atKD?'on':''}" id="atKD" title="Show your kills (green) and deaths (red) as lines across the timeline">Kills/Deaths</button>`:''}</div></header>
     <div class="body"><div id="atReadout" class="dim" style="height:20px;line-height:20px;font-size:12px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Hover the timeline to read every track at that moment · click a bubble for the cast breakdown · click ☠ / ⚔ for a recap</div><div id="atl"></div>
      <div class="legend"><span><i class="dot" style="background:var(--Maelstrom)"></i><i class="dot" style="background:var(--Adders)"></i><i class="dot" style="background:var(--Flames)"></i>team points</span><span><i class="dot" style="background:var(--gold2)"></i>your Battle High</span>${m.selfShield?.length?'<span><i class="dot" style="background:var(--dh)"></i>your shield (▲ gained)</span>':''}
-      ${m.combat?`<span><i class="dot" style="background:var(--dmg)"></i>damage dealt / <span class="bad">taken</span> (hits + ticks)</span><span><i class="dot" style="background:var(--dmg)"></i>one cast — size = total damage incl. ticks, number = players hit</span><span style="color:var(--tick)">┃ ticks from that cast</span><span style="color:var(--dh)">● ┃ damage reflected by Chiten etc.</span>
+      ${m.combat?`<span><i class="dot" style="background:var(--dmg)"></i>damage dealt / <span class="bad">taken</span> (hits + ticks)</span><span><i class="dot" style="background:var(--heal)"></i>healing yours / received</span><span><i class="dot" style="background:var(--dmg)"></i>one cast — size = total damage incl. ticks, number = players hit</span><span style="color:var(--tick)">┃ ticks from that cast</span><span style="color:var(--dh)">● ┃ damage reflected by Chiten etc.</span>
       <span><i class="dot" style="background:rgba(160,160,160,.6)"></i>on cooldown</span><span><i class="dot" style="background:rgba(95,184,122,.6)"></i>ready but not used</span>`:''}<span class="bad">┊ ☠ your deaths</span><span class="good">┊ ⚔ your kills</span></div>
      <div id="castDetail"></div></div></section>`:''}
   <section class="panel"><header><h2>Team Points</h2></header><div class="body" id="teamPts"></div></section>
@@ -697,6 +705,12 @@ function atWindow(m){const W=+MD.atWin||m.durationSec;const start=W>=m.durationS
 function centerWindowOn(m,t){if(!+MD.atWin||+MD.atWin>=m.durationSec)return;const W=+MD.atWin;MD.atPos=Math.round(Math.max(0,Math.min(1,(t-W/2)/(m.durationSec-W)))*1000)}
 /* Integrated Match Timeline: team points, Battle High, your damage dealt/taken and one lane per ability, all on one
    time axis with one zoom window. Deaths/kills cut across every track. Works without a combat log (first two tracks). */
+/* Healing: how a heal on you is listed, and how much of a heal went past full HP (estimate from HP before it). */
+function healLabel(r){if(r.lifesteal){if(/\(when hit\)$/.test(r.name))return r.name;return `${r.via||'Lifesteal'} (lifesteal on ${r.name})`}return r.kind==='hot'?`${r.name} (HoT)`:r.name}
+/* Older recordings stored your own heals that fired when an enemy hit you (Bloodbath + Chiten etc.) as healing "from"
+   that enemy. A heal arriving with an enemy's hit is yours. */
+function isProcIn(m,c){return c.dir==='in'&&c.heal>0&&(c.otherTeam?c.otherTeam!==m._team:!!c.dmg)}
+function overhealOf(r){const h=r.heal||0;if(!h)return 0;const hp=r.dir==='out'?r.otherHp:r.selfHp,mx=r.dir==='out'?r.otherMaxHp:r.selfMaxHp;if(hp==null||!mx)return 0;return Math.max(0,h-Math.max(0,mx-hp))}
 /* Your shield gains, each credited to your own action within 1.5 s before it (e.g. Ogi Namikiri), otherwise a
    teammate's action on you in that window, otherwise "Unknown". Also returns the total drop of your shield. */
 function shieldInfo(m){
@@ -767,6 +781,15 @@ function drawAbilityTimeline(m,casts,deaths){
     bo.forEach((v,k)=>{if(v)g+=`<rect x="${LW+k*bw}" width="${Math.max(1,bw-.6)}" y="${mid-v/mx*46}" height="${v/mx*46}" fill="var(--dmg)" opacity=".8"/>`});
     bi.forEach((v,k)=>{if(v)g+=`<rect x="${LW+k*bw}" width="${Math.max(1,bw-.6)}" y="${mid}" height="${v/mx*28}" fill="var(--bad)" opacity=".65"/>`});
     tracks.push({name:'dmg',top,h:TH});y+=TH+8}
+  // ── track: healing (yours up, received from teammates down) ──
+  let hb=[],hr=[];
+  if(C&&C.some(c=>c.heal)){const TH=70,top=y,mid=top+44,n=Math.ceil(span/B);hb=new Array(n).fill(0);hr=new Array(n).fill(0);
+    for(const c of C){if(!c.heal||c.t<w0||c.t>=w1)continue;const k=Math.min(n-1,Math.floor((c.t-w0)/B));if(c.dir==='in'&&!isProcIn(m,c))hr[k]+=c.heal;else hb[k]+=c.heal}
+    const mx=Math.max(1,...hb,...hr),bw=(W-LW-8)/n;
+    g+=`<rect x="0" y="${top}" width="${W}" height="${TH}" fill="rgba(255,255,255,.015)"/>`+label('Healing',top+16,`yours ▲ received ▼ per ${B}s`)+`<line x1="${LW}" x2="${W-8}" y1="${mid}" y2="${mid}" stroke="var(--line)"/>`;
+    hb.forEach((v,k)=>{if(v)g+=`<rect x="${LW+k*bw}" width="${Math.max(1,bw-.6)}" y="${mid-v/mx*40}" height="${v/mx*40}" fill="var(--heal)" opacity=".8"/>`});
+    hr.forEach((v,k)=>{if(v)g+=`<rect x="${LW+k*bw}" width="${Math.max(1,bw-.6)}" y="${mid}" height="${v/mx*22}" fill="var(--heal)" opacity=".4"/>`});
+    tracks.push({name:'heal',top,h:TH});y+=TH+8}
   // ── ability lanes ──
   const vis=casts.filter(c=>c.targets>=MD.atMin);
   const unl=casts.unlinked||[],tl=n=>n+' (ticks)';
@@ -814,6 +837,7 @@ function drawAbilityTimeline(m,casts,deaths){
     if(m.battleHigh?.length)parts.push(`BH ${fmt(valAt(m.battleHigh,t))}`);
     if(m.selfShield?.length)parts.push(`<span style="color:var(--dh)">shield ${fmt(valAt(m.selfShield,t))}</span>`);
     if(B){const k=Math.floor((t-w0)/B);parts.push(`<span class="dmg">dealt ${kfmt(bo[k]||0)}</span> / <span class="bad">taken ${kfmt(bi[k]||0)}</span> (${mmss(w0+k*B)}–${mmss(w0+(k+1)*B)})`)}
+    if(hb.length){const k=Math.floor((t-w0)/B);if(hb[k]||hr[k])parts.push(`<span class="heal">healed ${kfmt(hb[k]||0)}${hr[k]?` / received ${kfmt(hr[k])}`:''}</span>`)}
     const near=casts.filter(c=>Math.abs(c.t-t)<=Math.max(1,span/200)).sort((a,b)=>b.total-a.total);if(near.length)parts.push(near.slice(0,3).map(c=>`${esc(c.name)} ×${c.targets} ${kfmt(c.total)}`).join(', ')+(near.length>3?` <span title="${esc(near.slice(3).map(c=>`${c.name} ×${c.targets} ${kfmt(c.total)}`).join(', '))}">+${near.length-3} more</span>`:''));
     ro.innerHTML=parts.join(' &nbsp;|&nbsp; ')};
   svg.onmouseleave=()=>xh.setAttribute('visibility','hidden');
@@ -897,6 +921,11 @@ function drawCombat(m){
   ${C&&(m.selfShield?.length||out.some(r=>r.kind==='reflect')||inc.some(r=>r.shield))?`<section class="panel"><header><h2>Shields & Reflects</h2><span class="dim">your shields, and damage your statuses (e.g. Chiten) sent back</span></header>
     <div class="body"><div class="tiles" id="srTiles"></div><div class="grid2" style="margin-top:12px"><div><div class="dim" style="margin-bottom:4px">Shield sources</div><div id="srSources"></div></div>
     <div><div class="dim" style="margin-bottom:4px">Reflect activations</div><div id="srReflects"></div></div></div></div></section>`:''}
+  ${C&&C.some(c=>c.heal)?`<section class="panel"><header><h2>Healing</h2><span class="dim">everything that healed you or that you healed · overheal is estimated from HP before each heal</span></header>
+    <div class="body"><div class="tiles" id="hlTiles"></div>
+    <div style="margin-top:12px"><div class="dim" style="margin-bottom:4px">Your heals on yourself, by source</div><div id="hlSources"></div></div>
+    <div class="grid2" style="margin-top:12px"><div><div class="dim" style="margin-bottom:4px">Teammates you healed</div><div id="hlTargets"></div></div>
+    <div><div class="dim" style="margin-bottom:4px">Healing you received from teammates</div><div id="hlReceived"></div></div></div></div></section>`:''}
   <section class="panel"><header><h2>Biggest Casts</h2><span class="dim">every target a single cast hit, added together · click for the breakdown</span></header><div class="body" id="topCasts"></div></section>
   <div class="grid2">
    <section class="panel"><header><h2 id="skillTitle">Skills</h2><div class="flex"><button class="btn ${MD.cView==='out'?'on':''}" data-cv="out">Dealt</button><button class="btn ${MD.cView==='in'?'on':''}" data-cv="in">Taken</button></div></header><div class="body" id="cSkills"></div></section>
@@ -908,6 +937,21 @@ function drawCombat(m){
   host.querySelectorAll('[data-cv]').forEach(b=>b.onclick=()=>{MD.cView=b.dataset.cv;MD.cSkill=null;drawCombat(m);bindTips(host)});
   // casts (ability timeline)
   const casts=C?groupCasts(out,C):(S.topCasts||[]);
+  if($('#hlTiles')){const procIn=C.filter(r=>isProcIn(m,r)).map(r=>({...r,dir:'self',lifesteal:true,name:'Heal (when hit)',crit:false,selfHp:r.selfHp,selfMaxHp:r.selfMaxHp}));
+    const selfH=[...C.filter(r=>r.dir==='self'&&r.heal),...procIn],outH=C.filter(r=>r.dir==='out'&&r.heal),inH=C.filter(r=>r.dir==='in'&&r.heal&&r.kind!=='death'&&!isProcIn(m,r));
+    const tot=sum(selfH,r=>r.heal)+sum(outH,r=>r.heal),over=sum([...selfH,...outH],overhealOf),hasHp=selfH.some(r=>r.selfHp!=null),procs=sum(selfH.filter(r=>r.lifesteal),r=>r.heal);
+    $('#hlTiles').innerHTML=[["Healing done",kfmt(tot),`${kfmt(tot/Math.max(1,m.durationSec)*60)} per minute`],["On yourself",kfmt(sum(selfH,r=>r.heal))],["On teammates",kfmt(sum(outH,r=>r.heal))],
+      ["Received from teammates",kfmt(sum(inH,r=>r.heal))],["Overheal (est.)",hasHp?kfmt(over):'—',hasHp?`${pct(over/Math.max(1,tot))} of your healing`:'recorded on matches from this update on'],["Lifesteal & procs",kfmt(procs),'Bloodbath, heals when hit']]
+      .map(([k,v,sub])=>`<div class="tile"><div class="k">${k}</div><div class="v heal">${v}</div>${sub?`<div class="s">${sub}</div>`:''}</div>`).join('');
+    const grp=(rows,key,extra)=>{const o={};rows.forEach(r=>{const k=key(r);const x=(o[k]??={key:k,hits:0,total:0,over:0,crits:0,...(extra?extra(r):{})});x.hits++;x.total+=r.heal;x.over+=overhealOf(r);if(r.crit)x.crits++});
+      return Object.values(o).map(x=>({...x,avg:x.total/x.hits,cr:x.crits/x.hits,op:hasHp?x.over/Math.max(1,x.total):null}))};
+    const hc=[{k:'hits',label:'Heals'},{k:'total',label:'Total',def:1,fmt:v=>`<span class="heal">${fmt(v)}</span>`},{k:'avg',label:'Avg',fmt:kfmt},{k:'cr',label:'Crit',fmt:v=>pct(v)},{k:'over',label:'Overheal',fmt:v=>hasHp?kfmt(v):'—'},{k:'op',label:'Overheal %',fmt:v=>v==null?'—':pct(v)}];
+    table($('#hlSources'),grp(selfH,healLabel),[{k:'key',label:'Source',l:1},...hc],{noscroll:1});
+    if(!selfH.length)$('#hlSources').innerHTML='<div class="empty">No self-healing recorded.</div>';
+    table($('#hlTargets'),grp(outH,r=>r.other,r=>({job:r.otherJob,team:r.otherTeam})),[{k:'key',label:'Teammate',l:1,fmt:(v,r)=>`${r.team?`<span class="t-${r.team}">●</span> `:''}${esc(v)} ${r.job?`<span class="pill">${esc(r.job)}</span>`:''}`},...hc],{noscroll:1});
+    if(!outH.length)$('#hlTargets').innerHTML='<div class="empty">You didn\'t heal any teammates.</div>';
+    table($('#hlReceived'),grp(inH,r=>r.other+'|'+healLabel(r),r=>({from:r.other,skill:healLabel(r),job:r.otherJob,team:r.otherTeam})),[{k:'from',label:'From',l:1,fmt:(v,r)=>`${r.team?`<span class="t-${r.team}">●</span> `:''}${esc(v)} ${r.job?`<span class="pill">${esc(r.job)}</span>`:''}`},{k:'skill',label:'Skill',l:1},{k:'hits',label:'Heals'},{k:'total',label:'Total',def:1,fmt:v=>`<span class="heal">${fmt(v)}</span>`}],{noscroll:1});
+    if(!inH.length)$('#hlReceived').innerHTML='<div class="empty">No healing from teammates recorded.</div>';}
   if($('#srTiles')){const si=shieldInfo(m),refl=casts.filter(c=>c.reflect);
     $('#srTiles').innerHTML=[["Shield gained",kfmt(si.gained),`${si.gains.length} time${si.gains.length===1?'':'s'}`],["Damage your shields absorbed",kfmt(si.absorbed)],["Shield expired unused",kfmt(si.expired)],
       ["Reflected damage",kfmt(sum(refl,c=>c.total)),`${sum(refl,c=>c.reflectHits||0)} hits reflected`],["Reflect activations",fmt(refl.length)],["Reflect kills",fmt(sum(refl,c=>c.kills))]]

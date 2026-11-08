@@ -73,6 +73,14 @@ public class CombatLogEntry {
     /// </summary>
     public long? ShieldAbsorbed { get; set; }
 
+    /// <summary>A heal on you that your own status produced: lifesteal off your hits, or a heal that fired when you were hit (e.g. Bloodbath with Chiten).</summary>
+    public bool Lifesteal { get; set; }
+    /// <summary>Your heal-producing statuses active at the time, e.g. "Bloodbath + Chiten".</summary>
+    public string? Via { get; set; }
+    /// <summary>Your HP and max HP when the event arrived (before it applied). Used for overheal on heals you receive.</summary>
+    public uint? SelfHp { get; set; }
+    public uint? SelfMaxHp { get; set; }
+
     /// <summary>Set on the last hit before a death credited to the other party.</summary>
     public bool KillingBlow { get; set; }
 

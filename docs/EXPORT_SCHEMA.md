@@ -56,6 +56,8 @@ This one format is used by the HTML report (embedded in `<script id="report-data
 | statusApplied, statusResisted | number of status effects the action applied or that were resisted |
 | kb | this hit was the killing blow |
 | seq | server effect sequence number. Every target one cast hit shares it, so it is how AoE hits are grouped into a single cast |
+| lifesteal, via | heal produced by your own status: lifesteal off your hits, or a heal when hit. `via` = your active heal-producing statuses, e.g. "Bloodbath + Chiten" |
+| selfHp, selfMaxHp | your HP / max HP right before a heal on you (overheal) |
 | statuses | status IDs this hit applied (used to link DoT/HoT ticks to the cast) |
 | castT | for DoT/HoT ticks: the time `t` of the cast this tick is credited to |
 | x, z | your position when the event arrived |
@@ -65,6 +67,7 @@ This one format is used by the HTML report (embedded in `<script id="report-data
 `dealt`, `taken`, `selfSkills`: SkillRow[] (`name`, `kind`, `icon`, `hits`, `damage`, `heal`, `crits`, `directHits`, `maxHit`, `killingBlows`).
 `targets`, `sources`: OtherRow[] (`name`, `job`, `team`, `hits`, `damage`, `heal`, `killingBlows`).
 `kills`, `deaths`: ints.
+`healSelf`, `healToOthers`, `healReceived`, `overheal`, `healSources` (`[{source, hits, total, overheal, crits}]`): healing totals.
 `shieldGained`, `shieldAbsorbedOnYou`, `shieldExpired`: your shield totals. `shieldSources`: `[{source, times, total, biggest}]`. `reflected`, `reflectHits`, `reflectKills`: damage your statuses (e.g. Chiten) sent back.
 `topCasts`: your 15 biggest casts by `total`: `t`, `id`, `name`, `targets`, `damage` (direct), `ticks`, `tickDamage`, `tickHeal`, `lastTickT`, `total` (direct + ticks), `heal`, `crits`, `kills`, `x`, `z`, `hits[]` (`other`, `job`, `team`, `dmg`, `ticks`, `tickDmg`, `tickHeal`, `heal`, `crit`, `dh`, `kb`).
 Rows in `dealt` also carry `casts`, `maxTargets`, `bestCast` (direct + ticks) and `tickDamage`.

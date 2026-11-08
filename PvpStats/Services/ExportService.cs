@@ -287,6 +287,10 @@ internal class ExportService {
                         Kb = e.KillingBlow ? true : null,
                         Seq = e.GlobalSequence == 0 ? null : e.GlobalSequence,
                         Statuses = e.AppliedStatusIds is { Count: > 0 } ids ? new List<uint>(ids) : null,
+                        Lifesteal = e.Lifesteal ? true : null,
+                        Via = e.Via,
+                        SelfHp = e.Heal > 0 ? e.SelfHp : null,
+                        SelfMaxHp = e.Heal > 0 ? e.SelfMaxHp : null,
                         X = e.SelfX is float x ? MathF.Round(x, 1) : null,
                         Z = e.SelfZ is float z ? MathF.Round(z, 1) : null,
                     };
@@ -358,6 +362,13 @@ internal class ExportService {
             SelfSkills = Skills(rows.Where(r => r.Dir == "self")),
             Targets = Others(outRows),
             Sources = Others(inRows),
+            HealSelf = rows.Where(r => r.Dir == "self").Sum(r => r.Heal ?? 0),
+            HealToOthers = outRows.Sum(r => r.Heal ?? 0),
+            HealReceived = inRows.Sum(r => r.Heal ?? 0),
+            Overheal = rows.Where(r => r.Dir is "self" or "out").Sum(r => OverhealOf(r)),
+            HealSources = rows.Where(r => r.Dir == "self" && (r.Heal ?? 0) > 0).GroupBy(r => HealLabel(r))
+                .Select(g => new HealSourceDto { Source = g.Key, Hits = g.Count(), Total = g.Sum(r => r.Heal ?? 0), Overheal = g.Sum(r => OverhealOf(r)), Crits = g.Count(r => r.Crit == true) })
+                .OrderByDescending(x => x.Total).ToList(),
             ShieldGained = (long)ShieldGains(rows, shieldSamples).Sum(g => g.Amount),
             ShieldAbsorbedOnYou = inRows.Sum(r => r.Shield ?? 0),
             ShieldExpired = shieldSamples == null ? 0 : (long)Math.Max(0, ShieldDrops(shieldSamples) - inRows.Sum(r => r.Shield ?? 0)),
@@ -471,6 +482,24 @@ internal class ExportService {
             _actionMetaCache[id] = meta;
         }
         return meta;
+    }
+
+    /// <summary>How a heal on you is listed: "Bloodbath + Chiten (when hit)", "Bloodbath (lifesteal on Hyosetsu)", "Recuperate", "Regen (HoT)".</summary>
+    internal static string HealLabel(CombatDto r) {
+        if(r.Lifesteal == true) {
+            if(r.Name.EndsWith("(when hit)")) return r.Name;
+            return $"{r.Via ?? "Lifesteal"} (lifesteal on {r.Name})";
+        }
+        return r.Kind == "hot" ? $"{r.Name} (HoT)" : r.Name;
+    }
+
+    /// <summary>Part of a heal that went past full HP (estimate from HP before the heal).</summary>
+    internal static long OverhealOf(CombatDto r) {
+        long heal = r.Heal ?? 0;
+        if(heal <= 0) return 0;
+        uint? hp = r.Dir == "out" ? r.OtherHp : r.SelfHp, max = r.Dir == "out" ? r.OtherMaxHp : r.SelfMaxHp;
+        if(hp == null || max == null || max == 0) return 0;
+        return Math.Max(0, heal - Math.Max(0, (long)max.Value - hp.Value));
     }
 
     private static double ShieldDrops(List<double[]> samples) {
@@ -680,6 +709,13 @@ internal class ExportService {
         public int? StatusResisted { get; set; }
         public bool? Kb { get; set; }
         public uint? Seq { get; set; }
+        /// <summary>Heal produced by your own status (lifesteal / heal when hit).</summary>
+        public bool? Lifesteal { get; set; }
+        /// <summary>Your heal-producing statuses at the time, e.g. "Bloodbath + Chiten".</summary>
+        public string? Via { get; set; }
+        /// <summary>Your HP / max HP before a heal on you (overheal).</summary>
+        public uint? SelfHp { get; set; }
+        public uint? SelfMaxHp { get; set; }
         public List<uint>? Statuses { get; set; }
         /// <summary>For DoT/HoT ticks: time of the cast this tick was attributed to.</summary>
         public double? CastT { get; set; }
@@ -695,6 +731,14 @@ internal class ExportService {
         public List<OtherRowDto> Sources { get; set; } = [];
         public int Kills { get; set; }
         public int Deaths { get; set; }
+        /// <summary>Healing you did on yourself (skills, potions, lifesteal, heals when hit, HoTs).</summary>
+        public long HealSelf { get; set; }
+        public long HealToOthers { get; set; }
+        /// <summary>Healing teammates did on you.</summary>
+        public long HealReceived { get; set; }
+        /// <summary>Estimated overheal on your own heals (self + teammates).</summary>
+        public long Overheal { get; set; }
+        public List<HealSourceDto> HealSources { get; set; } = [];
         /// <summary>Shield you received (sum of every increase of your shield).</summary>
         public long ShieldGained { get; set; }
         /// <summary>Damage your shields soaked up.</summary>
@@ -708,6 +752,14 @@ internal class ExportService {
         public int ReflectKills { get; set; }
         /// <summary>Your 15 biggest casts by total damage.</summary>
         public List<CastDto> TopCasts { get; set; } = [];
+    }
+
+    internal class HealSourceDto {
+        public string Source { get; set; } = "";
+        public int Hits { get; set; }
+        public long Total { get; set; }
+        public long Overheal { get; set; }
+        public int Crits { get; set; }
     }
 
     internal class ShieldSourceDto {
