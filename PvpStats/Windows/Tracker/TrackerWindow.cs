@@ -1,4 +1,4 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
@@ -33,7 +33,7 @@ internal abstract class TrackerWindow<T> : Window where T : PvpMatch {
     internal List<DataFilter> PlayerStatFilters { get; private set; } = new();
     protected List<Refreshable<T>> Tabs = [];
 
-    protected TrackerWindow(Plugin plugin, StatsManager<T> statsManager, WindowConfiguration config, string name) : base(name) {
+    protected TrackerWindow(Plugin plugin, StatsManager<T> statsManager, WindowConfiguration config, string name) : base(name + BuildFlavor.TitleSuffix) {
         Plugin = plugin;
         StatsEngine = statsManager;
         CollapseFilters = config.FiltersCollapsed;

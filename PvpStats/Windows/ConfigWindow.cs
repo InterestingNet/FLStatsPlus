@@ -26,7 +26,7 @@ internal class ConfigWindow : Window {
     private float _saveOpacity = 0f;
     private bool _ipcUpdateInProgress = false;
 
-    public ConfigWindow(Plugin plugin) : base("PvP Tracker Settings") {
+    public ConfigWindow(Plugin plugin) : base("PvP Tracker Settings" + BuildFlavor.TitleSuffix) {
         SizeConstraints = new WindowSizeConstraints {
             MinimumSize = new Vector2(525, 500),
             MaximumSize = new Vector2(float.MaxValue, float.MaxValue)

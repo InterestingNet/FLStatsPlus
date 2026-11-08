@@ -11,6 +11,7 @@ using PvpStats.Settings;
 using PvpStats.Types.Match;
 using PvpStats.Utility;
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -23,14 +24,14 @@ public sealed class Plugin : IDalamudPlugin {
 
     internal const string DatabaseName = "data.db";
 
-    private const string SplashCommandName = "/flp";
-    private const string CCStatsCommandName = "/flpcc";
-    private const string FLStatsCommandName = "/flpfl";
-    private const string RWStatsCommandName = "/flprw";
-    private const string DebugCommandName = "/flpdebug";
-    private const string ConfigCommandName = "/flpconfig";
-    private const string LastMatchCommandName = "/flplast";
-    private const string ExportCommandName = "/flpexport";
+    private const string SplashCommandName = BuildFlavor.CommandPrefix + "";
+    private const string CCStatsCommandName = BuildFlavor.CommandPrefix + "cc";
+    private const string FLStatsCommandName = BuildFlavor.CommandPrefix + "fl";
+    private const string RWStatsCommandName = BuildFlavor.CommandPrefix + "rw";
+    private const string DebugCommandName = BuildFlavor.CommandPrefix + "debug";
+    private const string ConfigCommandName = BuildFlavor.CommandPrefix + "config";
+    private const string LastMatchCommandName = BuildFlavor.CommandPrefix + "last";
+    private const string ExportCommandName = BuildFlavor.CommandPrefix + "export";
 
     internal static IPluginLog Log2;
 
@@ -127,6 +128,7 @@ public sealed class Plugin : IDalamudPlugin {
 
             DataQueue = new();
             Ipc = new(this);
+            SeedDatabase();
             Storage = new(this, $"{PluginInterface.GetPluginConfigDirectory()}\\{DatabaseName}");
             CCCache = new(this);
             FLCache = new(this);
@@ -249,6 +251,31 @@ public sealed class Plugin : IDalamudPlugin {
                 WindowManager.OpenMatchDetailsWindow(lastMatch);
             }
         });
+    }
+
+    /// <summary>
+    /// Test builds: on first start, copy the normal install's database (and its log) so the test build has your
+    /// real match history. Read with shared access so it works while the normal plugin is running.
+    /// </summary>
+    private void SeedDatabase() {
+        if(BuildFlavor.SeedDatabaseFrom is not string source) return;
+        try {
+            var dir = PluginInterface.GetPluginConfigDirectory();
+            var target = Path.Combine(dir, DatabaseName);
+            if(File.Exists(target)) return;
+            var sourceDir = Path.Combine(Path.GetDirectoryName(dir.TrimEnd('\\', '/'))!, source);
+            foreach(var file in new[] { DatabaseName, Path.GetFileNameWithoutExtension(DatabaseName) + "-log.db" }) {
+                var from = Path.Combine(sourceDir, file);
+                if(!File.Exists(from)) continue;
+                Directory.CreateDirectory(dir);
+                using var src = new FileStream(from, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var dst = new FileStream(Path.Combine(dir, file), FileMode.CreateNew, FileAccess.Write);
+                src.CopyTo(dst);
+            }
+            Log.Information($"Seeded test database from {sourceDir}");
+        } catch(Exception e) {
+            Log.Warning(e, "Could not copy the main database; starting with an empty one.");
+        }
     }
 
     private void OnExportCommand(string command, string args) {

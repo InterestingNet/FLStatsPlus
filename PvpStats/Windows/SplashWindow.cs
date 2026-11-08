@@ -1,4 +1,4 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
@@ -11,7 +11,7 @@ internal class SplashWindow : Window {
 
     private Plugin _plugin;
 
-    public SplashWindow(Plugin plugin) : base("PvP Tracker") {
+    public SplashWindow(Plugin plugin) : base("PvP Tracker" + BuildFlavor.TitleSuffix) {
         _plugin = plugin;
         SizeConstraints = new WindowSizeConstraints {
             MinimumSize = new Vector2(185, 175),
