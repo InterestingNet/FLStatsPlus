@@ -596,7 +596,28 @@ internal class ConfigWindow : Window {
     }
 
     private void DrawPerformanceSettings() {
+        bool memorySaver = _plugin.Configuration.MemorySaver ?? false;
+        if(ImGui.Checkbox("Memory saver", ref memorySaver)) {
+            _plugin.Configuration.MemorySaver = memorySaver;
+            _plugin.DataQueue.QueueDataOperation(() => {
+                _plugin.ApplyCachingSettings();
+                _plugin.Configuration.Save();
+            });
+        }
+        ImGuiHelper.WrappedTooltip("Memory saver (off by default)\n\n"
+            + "Keeps your match history on disk instead of loading all of it into memory. "
+            + "Turn this on if you have a very large history (thousands of matches) and want the plugin to use less RAM.\n\n"
+            + "Trade-off: the tracker windows read matches from disk every time you change a filter or refresh, so they update more slowly. "
+            + "Recording matches, match details and exports work the same.\n\n"
+            + "While on, it overrides the Match Caching options below.", 420f);
+        ImGui.Separator();
+
+        var cachingDisabled = ImRaii.Disabled(memorySaver);
         ImGui.TextColored(_plugin.Configuration.Colors.Header, "Match Caching");
+        if(memorySaver) {
+            ImGui.SameLine();
+            ImGui.TextDisabled("(off while Memory saver is on)");
+        }
         ImGuiHelper.HelpMarker("Enabling these options will cache your entire match history in memory. Can help with refresh performance at the cost of increased memory usage.", true);
 
         bool enableCachingCC = _plugin.Configuration.EnableDBCachingCC ?? true;
@@ -635,6 +656,8 @@ internal class ConfigWindow : Window {
                 _plugin.Configuration.Save();
             });
         }
+
+        cachingDisabled.Dispose();
 
         ImGui.Separator();
         ImGui.TextColored(_plugin.Configuration.Colors.Header, "Enhanced Tracking Features");
