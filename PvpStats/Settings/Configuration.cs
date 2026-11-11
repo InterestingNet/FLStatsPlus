@@ -15,6 +15,8 @@ public class Configuration : IPluginConfiguration {
     public static readonly int CurrentVersion = 0;
     public int Version { get; set; } = CurrentVersion;
     public string LastPluginVersion { get; set; } = "0.0.0.0";
+    /// <summary>Keep match history on disk instead of in memory, for all modes (overrides the per-mode caching options).</summary>
+    public bool? MemorySaver { get; set; }
     public bool? EnableDBCachingCC { get; set; }
     public bool? EnableDBCachingFL { get; set; }
     public bool? EnableDBCachingRW { get; set; }

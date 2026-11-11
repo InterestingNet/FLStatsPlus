@@ -278,6 +278,26 @@ public sealed class Plugin : IDalamudPlugin {
         }
     }
 
+    /// <summary>
+    /// Turns each mode's in-memory match cache on or off from the settings. Memory saver turns them all off;
+    /// otherwise each mode follows its own "Match Caching" option. Call from the data queue (not the game thread).
+    /// </summary>
+    internal void ApplyCachingSettings() {
+        bool saver = Configuration.MemorySaver ?? false;
+        SetCaching(CCCache, !saver && (Configuration.EnableDBCachingCC ?? true));
+        SetCaching(FLCache, !saver && (Configuration.EnableDBCachingFL ?? true));
+        SetCaching(RWCache, !saver && (Configuration.EnableDBCachingRW ?? true));
+        if(saver) {
+            // hand the freed match lists back to the OS now rather than whenever the GC gets to it
+            GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+        }
+    }
+
+    private static void SetCaching<T>(Services.DataCache.MatchCacheService<T> cache, bool enabled) where T : PvpMatch {
+        if(enabled && !cache.CachingEnabled) cache.EnableCaching();
+        else if(!enabled && cache.CachingEnabled) cache.DisableCaching();
+    }
+
     private void OnExportCommand(string command, string args) {
         var arg = args.Trim().ToLowerInvariant();
         Task.Run(async () => {
@@ -328,15 +348,7 @@ public sealed class Plugin : IDalamudPlugin {
 #endif
 
     private async Task Initialize() {
-        if(Configuration.EnableDBCachingCC ?? true) {
-            CCCache.EnableCaching();
-        }
-        if(Configuration.EnableDBCachingFL ?? true) {
-            FLCache.EnableCaching();
-        }
-        if(Configuration.EnableDBCachingRW ?? true) {
-            RWCache.EnableCaching();
-        }
+        ApplyCachingSettings();
 
         var lastVersion = new Version(Configuration.LastPluginVersion);
         var currentVersion = Assembly.GetExecutingAssembly().GetName().Version;
