@@ -453,9 +453,11 @@ function viewPlayers(v,ms){
 /* ─────────── Data Centers ─────────── */
 const DCPAL=["#4f8fd9","#e0a458","#5fb87a","#c86f9a","#8f7be0","#6fd3e8","#d9d26a","#c85a5a"];
 const dcOf=p=>p.dc||"Unknown";
+const NA_DCS=["Aether","Primal","Crystal","Dynamis"];
+const isNA=p=>p.region?p.region==="NA":NA_DCS.includes(p.dc);
 function viewDCs(v,ms){
   const yourDc=m=>m._you?dcOf(m._you):null;
-  v.innerHTML=`<section class="panel"><header><h2>Data Centers</h2><div class="flex"><span class="dim">Players counted</span>
+  v.innerHTML=`<section class="panel"><header><h2>Data Centers — North America</h2><div class="flex"><span class="dim">Only players from NA data centers are counted ·</span><span class="dim">Players counted</span>
      <select id="dcSrc"><option value="others">Everyone but you</option><option value="team">Teammates</option><option value="opp">Opponents</option></select></div></header>
      <div class="body"><div class="tiles" id="dcTiles"></div></div></section>
    <section class="panel"><header><h2>By data center</h2><span class="dim">click a data center to see its worlds and players</span></header><div class="body" id="dcTbl"></div></section>
@@ -467,18 +469,18 @@ function viewDCs(v,ms){
    <section class="panel ${F.dc?'':'hidden'}" id="dcDetail"><header><h2 id="dcDetailTitle"></h2><button class="btn" id="dcClear">Show all</button></header><div class="body"><div class="grid2"><div id="dcWorlds"></div><div id="dcPlayers"></div></div></div></section>
    <section class="panel"><header><h2>Possible transfers</h2><span class="flex"><span class="dim">same name on a new data center after it stopped appearing on the old one</span><label class="dim"><input type="checkbox" id="dcOverlap" ${F.dcOverlap?'checked':''}> also show overlaps (often different people)</label></span></header><div class="body" id="dcMoves"></div></section>`;
   const src=F.dcSrc||"others";$('#dcSrc').value=src;$('#dcSrc').onchange=e=>{F.dcSrc=e.target.value;refresh()};
-  const es=sourceEntries(ms,src).filter(e=>!e.p.isYou);
+  const es=sourceEntries(ms,src).filter(e=>!e.p.isYou&&isNA(e.p));
   // tiles
   const uniq=new Set(es.map(e=>e.p.name+" "+e.p.world)),dcs=new Set(es.map(e=>dcOf(e.p)));
   const same=es.filter(e=>yourDc(e.m)&&dcOf(e.p)===yourDc(e.m)).length;
   const yourRegion=m=>m._you?.region;
-  const crossRegion=es.filter(e=>yourRegion(e.m)&&e.p.region&&e.p.region!==yourRegion(e.m)).length;
-  const mixed=ms.filter(m=>new Set(m.players.map(dcOf)).size>1).length;
-  const avgDcs=safeDiv(sum(ms,m=>new Set(m.players.map(dcOf)).size),ms.length);
+  const naDcs=m=>new Set(m.players.filter(isNA).map(dcOf)).size;
+  const mixed=ms.filter(m=>naDcs(m)>1).length;
+  const avgDcs=safeDiv(sum(ms,naDcs),ms.length);
   const homes=[...new Set(ms.map(yourDc).filter(Boolean))];
-  $('#dcTiles').innerHTML=[["Data centers seen",fmt(dcs.size)],["Players seen",fmt(uniq.size)],["Your data center",esc(homes.join(", ")||"—")],
-    ["From your DC",pct(safeDiv(same,es.length))],["From other DCs",pct(safeDiv(es.length-same,es.length))],["From other regions",pct(safeDiv(crossRegion,es.length))],
-    ["Matches with other DCs",pct(safeDiv(mixed,ms.length))],["Avg DCs per match",fmt(avgDcs,1)]]
+  $('#dcTiles').innerHTML=[["NA data centers seen",fmt(dcs.size)],["Players seen",fmt(uniq.size)],["Your data center",esc(homes.join(", ")||"—")],
+    ["From your DC",pct(safeDiv(same,es.length))],["From other DCs",pct(safeDiv(es.length-same,es.length))],
+    ["Matches with other NA DCs",pct(safeDiv(mixed,ms.length))],["Avg NA DCs per match",fmt(avgDcs,1)]]
     .map(([k,val])=>`<div class="tile"><div class="k">${k}</div><div class="v">${val}</div></div>`).join('');
   // by DC
   const by={};es.forEach(e=>(by[dcOf(e.p)]??=[]).push(e));
@@ -508,7 +510,7 @@ function viewDCs(v,ms){
       life:safeDiv(sum(l,e=>e.p.damageToPCs||0),sum(l,e=>(e.p.deaths||0)+1))}};
   const dmgBy={};es.filter(e=>roleOk(e.p)).forEach(e=>(dmgBy[dcOf(e.p)]??=[]).push(e));
   const dmgRows=Object.entries(dmgBy).map(([dc,l])=>dmgRow(dc,l));
-  const allE=Object.values(dmgBy).flat(),allRow=allE.length?dmgRow("All data centers",allE):null;
+  const allE=Object.values(dmgBy).flat(),allRow=allE.length?dmgRow("All NA data centers",allE):null;
   const base=dmgRows.find(r=>homes.includes(r.dc))?.pcs??allRow?.pcs;
   dmgRows.forEach(r=>r.vs=base?r.pcs/base-1:NaN);
   const maxPcs=Math.max(1,...dmgRows.map(r=>r.pcs||0)),u=perMin?'/min':'';
@@ -523,7 +525,7 @@ function viewDCs(v,ms){
     {rowClass:r=>r._all?'teamrow':''});
   // trend: rolling share per DC across matches (top 6 DCs, rest = Other)
   const top=[...rows].sort((a,b)=>b.app-a.app).slice(0,6).map(r=>r.dc),Wn=Math.min(20,Math.max(3,Math.round(ms.length/8)));
-  const perMatch=ms.map(m=>{const c={},ps=m.players.filter(p=>!p.isYou&&(src==="others"||(src==="team"?p.team===m._team:m._team&&p.team!==m._team)));
+  const perMatch=ms.map(m=>{const c={},ps=m.players.filter(p=>!p.isYou&&isNA(p)&&(src==="others"||(src==="team"?p.team===m._team:m._team&&p.team!==m._team)));
     ps.forEach(p=>{const k=top.includes(dcOf(p))?dcOf(p):"Other";c[k]=(c[k]||0)+1});return{c,n:ps.length}});
   const keys=[...top,...(perMatch.some(x=>x.c.Other)?["Other"]:[])];
   if(ms.length>=2){
@@ -547,7 +549,7 @@ function viewDCs(v,ms){
   }
   // possible transfers: same name, different DCs, ordered by time
   const seen={};
-  for(const m of ms)for(const p of m.players){const r=(seen[p.name]??={}),k=p.world;(r[k]??={world:k,dc:dcOf(p),first:m._t,last:m._t,n:0});r[k].last=m._t;r[k].n++}
+  for(const m of ms)for(const p of m.players.filter(isNA)){const r=(seen[p.name]??={}),k=p.world;(r[k]??={world:k,dc:dcOf(p),first:m._t,last:m._t,n:0});r[k].last=m._t;r[k].n++}
   const moves=[];
   for(const [name,w] of Object.entries(seen)){const ws=Object.values(w);if(new Set(ws.map(x=>x.dc)).size<2)continue;ws.sort((a,b)=>a.first-b.first);
     const a=ws[0],b=ws[ws.length-1];
