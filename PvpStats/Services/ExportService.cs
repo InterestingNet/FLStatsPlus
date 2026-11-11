@@ -51,7 +51,7 @@ internal class ExportService {
                     var dc = w.DataCenter.Value;
                     var dcName = dc.Name.ToString();
                     if(string.IsNullOrEmpty(dcName)) continue;
-                    var region = dc.Region switch { 1 => "JP", 2 => "NA", 3 => "EU", 4 => "OCE", 5 => "CN", 6 => "KR", 7 => "TC", _ => "Other" };
+                    var region = dc.Region.RowId switch { 1 => "JP", 2 => "NA", 3 => "EU", 4 => "OCE", 5 => "CN", 6 => "KR", 7 => "TC", _ => "Other" };
                     map.TryAdd(name, (dcName, region));
                 }
             } catch(Exception e) {
