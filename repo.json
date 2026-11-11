@@ -3,8 +3,8 @@
     "Author": "SaMo (PvpStats) / FLStatsPlus contributors",
     "Name": "FLStats Plus",
     "InternalName": "FLStatsPlus",
-    "AssemblyVersion": "0.2.0.0",
-    "TestingAssemblyVersion": "0.2.0.0",
+    "AssemblyVersion": "0.3.0.0",
+    "TestingAssemblyVersion": "0.3.0.0",
     "Punchline": "PvP match history and stats tracker with combat logs and HTML export.",
     "Description": "Fork of PvP Tracker (PvpStats) by SaMo. Records Crystalline Conflict, Frontline and Rival Wings match history and stats, adds a Frontline personal combat log (every skill you hit with and every hit you took) and exports matches and history to self-contained HTML reports, JSON and CSV.",
     "Changelog": "* Initial fork: Frontline self combat log, HTML/JSON/CSV export.",
@@ -18,9 +18,9 @@
     "TestingDalamudApiLevel": 15,
     "IsHide": false,
     "IsTestingExclusive": false,
-    "DownloadLinkInstall": "https://github.com/InterestingNet/FLStatsPlus/releases/download/v0.2.0/latest.zip",
-    "DownloadLinkTesting": "https://github.com/InterestingNet/FLStatsPlus/releases/download/v0.2.0/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/InterestingNet/FLStatsPlus/releases/download/v0.2.0/latest.zip",
-    "LastUpdate": 1794386919
+    "DownloadLinkInstall": "https://github.com/InterestingNet/FLStatsPlus/releases/download/v0.3.0/latest.zip",
+    "DownloadLinkTesting": "https://github.com/InterestingNet/FLStatsPlus/releases/download/v0.3.0/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/InterestingNet/FLStatsPlus/releases/download/v0.3.0/latest.zip",
+    "LastUpdate": 1794423860
   }
 ]
