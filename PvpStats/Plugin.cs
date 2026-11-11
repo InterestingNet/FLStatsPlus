@@ -19,7 +19,7 @@ using System.Threading.Tasks;
 
 namespace PvpStats;
 
-public sealed class Plugin : IDalamudPlugin {
+public sealed class Plugin : IDisposable {
     public string Name => "FLStatsPlus";
 
     internal const string DatabaseName = "data.db";

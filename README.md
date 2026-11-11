@@ -17,7 +17,15 @@ A Dalamud plugin for FFXIV PvP stats. It's a fork of [PvP Tracker (PvpStats)](ht
    https://raw.githubusercontent.com/InterestingNet/FLStatsPlus/master/repo.json
    ```
 3. Type `/xlplugins`, search for **FLStats Plus**, and click **Install**.
-4. Type `/flp` to open it.
+4. Type `/flp`. The first time, it asks for an **access code**: paste the code you were given and click **Unlock**. The plugin doesn't track anything until it's unlocked, and it remembers the code after that.
+
+### Access codes (owner)
+
+Codes are signed with the owner's private key (`FLStatsPlus-owner-key.pem`, never committed). The plugin only contains the public key, so it can check codes but not make them.
+
+- In game: `/flpowner` → paste the owner key once → type a name → **Make code** (copied to the clipboard). Every code made is logged in `issued-codes.csv` in the plugin config folder.
+- Outside the game: `python tools/make_access_code.py FLStatsPlus-owner-key.pem "Name"`.
+- To turn a code off, add its id (from `issued-codes.csv`) to `Revoked` in `PvpStats/Access/AccessCode.cs` and publish a new version.
 
 New versions arrive through Dalamud's normal plugin updates. Your match history is kept between updates.
 
