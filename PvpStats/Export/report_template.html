@@ -29,6 +29,12 @@ nav button:hover:not(.on){border-color:var(--gold);color:var(--text)}
 .panel>header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 14px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(79,143,217,.13),rgba(79,143,217,0))}
 .panel>header h2{font-size:14px;color:var(--gold2)}
 .panel .body{padding:12px 14px}
+.ptoggle{background:none;border:0;color:var(--gold2);cursor:pointer;font-size:11px;width:18px;padding:0;margin-right:6px;line-height:1;transition:transform .15s;display:inline-block}
+.ptoggle:hover{color:#fff}
+.panel.collapsed .ptoggle{transform:rotate(-90deg)}
+.panel.collapsed>:not(header){display:none!important}
+.panel.collapsed>header{border-bottom:0}
+.panel.collapsed>header>:not(h2){display:none}
 .scroll{overflow:auto;max-height:620px}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px}
 .filters label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;display:flex;flex-direction:column;gap:3px}
@@ -267,6 +273,21 @@ function nav(){
   $('#nav').innerHTML=VIEWS.map(([k,l])=>`<button data-v="${k}" class="${VIEW===k?'on':''} ${k==='match'&&!SEL?'hidden':''}">${l}</button>`).join('');
   $('#nav').querySelectorAll('button').forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;refresh()});
 }
+/* Collapsible panels: a triangle before each panel title hides/shows that panel. Remembered per tab + title. */
+const COLLAPSED=new Set((()=>{try{return JSON.parse(localStorage.getItem('flp.collapsed')||'[]')}catch(e){return[]}})());
+const panelKey=sec=>{const h=sec.querySelector(':scope>header>h2');if(!h)return null;
+  return VIEW+'|'+(h.dataset.key||h.textContent.split('—')[0].replace(/[\d,.]+/g,'#').trim())};
+function enhancePanels(root){
+  root.querySelectorAll('section.panel').forEach(sec=>{
+    const h=sec.querySelector(':scope>header>h2');if(!h||h.querySelector('.ptoggle'))return;
+    const k=panelKey(sec);if(!k)return;
+    const b=document.createElement('button');b.className='ptoggle';b.textContent='▼';b.title='Minimize / expand';
+    b.onclick=e=>{e.stopPropagation();const c=sec.classList.toggle('collapsed');c?COLLAPSED.add(k):COLLAPSED.delete(k);
+      try{localStorage.setItem('flp.collapsed',JSON.stringify([...COLLAPSED]))}catch(e){}};
+    h.prepend(b);h.style.cursor='pointer';h.title='Click to minimize / expand';h.onclick=e=>{if(e.target===h)b.click()};sec.classList.toggle('collapsed',COLLAPSED.has(k));
+  });
+}
+new MutationObserver(()=>enhancePanels($('#view'))).observe(document.getElementById('view'),{childList:true,subtree:true});
 function openMatch(m){SEL=m;VIEW="match";MD.cast=null;MD.atPos=0;refresh();scrollTo({top:0,behavior:'smooth'})}
 
 function refresh(){
