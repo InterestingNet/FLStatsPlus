@@ -766,7 +766,7 @@ internal class ConfigWindow : Window {
                 _usedFolder = exporter.ExportDirectory;
             }
             var used = _usedFolder!;
-            if(!string.Equals(Path.GetFullPath(used).TrimEnd('\\', '/'), Path.GetFullPath(exporter.DefaultExportDirectory).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)) {
+            if(used != exporter.DefaultExportDirectory || string.Equals(Path.GetFullPath(Environment.ExpandEnvironmentVariables(custom.Trim().Trim('"'))).TrimEnd('\\', '/'), Path.GetFullPath(used).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)) {
                 ImGui.TextDisabled($"Saving to: {used}");
             } else {
                 ImGui.TextColored(new Vector4(1f, 0.55f, 0.45f, 1f), "That folder can't be used (it must be a full path like C:\\Users\\you\\Documents\\FL). Saving to the default folder instead.");
