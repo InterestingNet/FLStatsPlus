@@ -26,6 +26,8 @@ public class Configuration : IPluginConfiguration {
     public bool? EnableTimelineFL { get; set; }
     public bool? EnableCombatLogFL { get; set; }
     public bool? AutoExportFLMatchHtml { get; set; }
+    /// <summary>Where HTML/JSON/CSV exports are saved. Empty = the plugin's config folder\exports.</summary>
+    public string? ExportFolder { get; set; }
     public bool? EnableTimelineRW { get; set; }
 
     public bool? DisableMatchGuardsRW { get; set; }

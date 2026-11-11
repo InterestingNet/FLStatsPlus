@@ -2,12 +2,14 @@ using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
+using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Windowing;
 using PvpStats.Helpers;
 using PvpStats.Settings;
 using PvpStats.Types.Player;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
@@ -17,6 +19,9 @@ namespace PvpStats.Windows;
 internal class ConfigWindow : Window {
 
     private Plugin _plugin;
+    private readonly FileDialogManager _folderDialog = new();
+    private string? _exportFolderEdit;
+    private string? _checkedFolder, _usedFolder;
     private PlayerAliasLink _newManualLink;
     private string[] _linksVerbCombo = new[] { "IS", "IS NOT" };
     private List<PlayerAliasLink> ManualLinks { get; set; } = new();
@@ -70,6 +75,7 @@ internal class ConfigWindow : Window {
 
     public override void Draw() {
         //_plugin.Log.Verbose("draw config");
+        _folderDialog.Draw();
         using(var tabBar = ImRaii.TabBar("SettingsTabBar")) {
             using(var tab = ImRaii.TabItem("Interface")) {
                 if(tab) {
@@ -696,6 +702,7 @@ internal class ConfigWindow : Window {
                 _plugin.Configuration.Save();
             });
         }
+        DrawExportFolder();
         bool enableTimelineFL = _plugin.Configuration.EnableTimelineFL ?? true;
         if(ImGui.Checkbox("Frontline Timeline Tracking", ref enableTimelineFL)) {
             _plugin.Configuration.EnableTimelineFL = enableTimelineFL;
@@ -709,6 +716,61 @@ internal class ConfigWindow : Window {
             _plugin.DataQueue.QueueDataOperation(() => {
                 _plugin.Configuration.Save();
             });
+        }
+    }
+
+    private void SetExportFolder(string? folder) {
+        folder = folder?.Trim().Trim('"');
+        _plugin.Configuration.ExportFolder = string.IsNullOrEmpty(folder) ? null : folder;
+        _exportFolderEdit = null;
+        _plugin.DataQueue.QueueDataOperation(() => {
+            _plugin.Configuration.Save();
+        });
+    }
+
+    private void DrawExportFolder() {
+        var exporter = _plugin.Exporter;
+        ImGui.TextUnformatted("Export folder (HTML, JSON and CSV):");
+        _exportFolderEdit ??= _plugin.Configuration.ExportFolder ?? "";
+        var edit = _exportFolderEdit;
+        ImGui.SetNextItemWidth(Math.Max(200f * ImGuiHelpers.GlobalScale, ImGui.GetContentRegionAvail().X - 250f * ImGuiHelpers.GlobalScale));
+        if(ImGui.InputTextWithHint("##exportFolder", exporter.DefaultExportDirectory, ref edit, 512)) {
+            _exportFolderEdit = edit;
+        }
+        if(ImGui.IsItemDeactivatedAfterEdit()) {
+            SetExportFolder(_exportFolderEdit);
+        }
+        ImGuiHelper.WrappedTooltip("Paste a folder path, or use Browse. Leave empty to use the default folder shown in grey.");
+        ImGui.SameLine();
+        if(ImGui.Button("Browse…##exportFolder")) {
+            var start = exporter.ExportDirectory;
+            _folderDialog.OpenFolderDialog("Choose export folder", (ok, path) => {
+                if(ok && !string.IsNullOrEmpty(path)) SetExportFolder(path);
+            }, start, true);
+        }
+        ImGui.SameLine();
+        if(ImGui.Button("Open##exportFolder")) {
+            exporter.OpenExportFolder();
+        }
+        ImGui.SameLine();
+        using(ImRaii.Disabled(string.IsNullOrEmpty(_plugin.Configuration.ExportFolder))) {
+            if(ImGui.Button("Default##exportFolder")) {
+                SetExportFolder(null);
+            }
+        }
+        var custom = _plugin.Configuration.ExportFolder;
+        if(!string.IsNullOrEmpty(custom)) {
+            // checking the folder touches the disk, so only re-check when the setting changes
+            if(_checkedFolder != custom) {
+                _checkedFolder = custom;
+                _usedFolder = exporter.ExportDirectory;
+            }
+            var used = _usedFolder!;
+            if(!string.Equals(Path.GetFullPath(used).TrimEnd('\\', '/'), Path.GetFullPath(exporter.DefaultExportDirectory).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)) {
+                ImGui.TextDisabled($"Saving to: {used}");
+            } else {
+                ImGui.TextColored(new Vector4(1f, 0.55f, 0.45f, 1f), "That folder can't be used (it must be a full path like C:\\Users\\you\\Documents\\FL). Saving to the default folder instead.");
+            }
         }
     }
 

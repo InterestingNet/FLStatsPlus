@@ -66,9 +66,25 @@ internal class ExportService {
         _plugin = plugin;
     }
 
+    internal string DefaultExportDirectory => Path.Combine(_plugin.PluginInterface.GetPluginConfigDirectory(), "exports");
+
+    /// <summary>The chosen export folder, or the default if none is set or it can't be used.</summary>
     internal string ExportDirectory {
         get {
-            var dir = Path.Combine(_plugin.PluginInterface.GetPluginConfigDirectory(), "exports");
+            var custom = _plugin.Configuration.ExportFolder?.Trim().Trim('"');
+            if(!string.IsNullOrEmpty(custom)) {
+                try {
+                    custom = Environment.ExpandEnvironmentVariables(custom);
+                    if(Path.IsPathFullyQualified(custom)) {
+                        Directory.CreateDirectory(custom);
+                        return custom;
+                    }
+                    _plugin.Log.Warning($"Export folder must be a full path, using the default: {custom}");
+                } catch(Exception e) {
+                    _plugin.Log.Error(e, $"Can't use export folder {custom}, using the default");
+                }
+            }
+            var dir = DefaultExportDirectory;
             Directory.CreateDirectory(dir);
             return dir;
         }
