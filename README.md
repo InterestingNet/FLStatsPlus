@@ -8,14 +8,20 @@ A Dalamud plugin for FFXIV PvP stats. It's a fork of [PvP Tracker (PvpStats)](ht
 - **Saves data PvpStats throws away** – Wolf Marks, Series XP and Job XP per match.
 - **Better IPC** for other plugins (see below).
 
-## Installing (for players)
+## Installing
 
 1. In game, type `/xlsettings` and open the **Experimental** tab.
-2. Under **Custom Plugin Repositories**, paste the repo URL below, tick **Enabled**, then click **+** and **Save**:
-   `https://raw.githubusercontent.com/OWNER/REPO/BRANCH/repo.json`
-3. Type `/xlplugins`, search for **FLStats Plus**, and click **Install**. Dalamud updates it automatically when a new version is released.
+2. Under **Custom Plugin Repositories**, paste this link into the empty box, click **+**, make sure **Enabled** is ticked, then click **Save and Close**:
 
-The custom-repository link only works while the GitHub repository is **public**. With a private repo, players need GitHub access to download `latest.zip` from the Releases page, and must load it as a dev plugin (see *Building*).
+   ```
+   https://raw.githubusercontent.com/InterestingNet/FLStatsPlus/master/repo.json
+   ```
+3. Type `/xlplugins`, search for **FLStats Plus**, and click **Install**.
+4. Type `/flp` to open it.
+
+New versions arrive through Dalamud's normal plugin updates. Your match history is kept between updates.
+
+If you already use PvP Tracker (PvpStats), you can keep it installed: FLStats Plus uses its own commands and data.
 
 ## Releasing a new version (maintainer)
 
