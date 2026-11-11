@@ -464,7 +464,7 @@ function viewDCs(v,ms){
    <section class="panel"><header><h2>Average damage by data center</h2><div class="flex"><span class="dim">Role</span>
      <select id="dmgRole"><option value="">All roles</option><option value="TANK">Tanks</option><option value="HEALER">Healers</option><option value="DPS">All DPS</option><option value="MELEE">Melee</option><option value="RANGED">Physical ranged</option><option value="CASTER">Casters</option></select>
      <select id="dmgPer"><option value="match">per match</option><option value="min">per minute</option></select></div></header>
-     <div class="body"><div class="dim" style="margin-bottom:6px">Average for one player in one match. Role mix differs between data centers, so pick a role for a fairer comparison.</div><div id="dcDmg"></div></div></section>
+     <div class="body"><div class="dim" style="margin-bottom:6px">Damage here means damage to player characters only. Average for one player in one match. Role mix differs between data centers, so pick a role for a fairer comparison.</div><div id="dcDmg"></div></div></section>
    <section class="panel"><header><h2>Share of players over time</h2><span class="dim" id="dcTrendNote"></span></header><div class="body" id="dcTrend"></div></section>
    <section class="panel ${F.dc?'':'hidden'}" id="dcDetail"><header><h2 id="dcDetailTitle"></h2><button class="btn" id="dcClear">Show all</button></header><div class="body"><div class="grid2"><div id="dcWorlds"></div><div id="dcPlayers"></div></div></div></section>
    <section class="panel"><header><h2>Possible transfers</h2><span class="flex"><span class="dim">same name on a new data center after it stopped appearing on the old one</span><label class="dim"><input type="checkbox" id="dcOverlap" ${F.dcOverlap?'checked':''}> also show overlaps (often different people)</label></span></header><div class="body" id="dcMoves"></div></section>`;
@@ -492,7 +492,7 @@ function viewDCs(v,ms){
   const rows=Object.entries(by).map(([dc,list])=>rowFor(dc,list,{dc,region:list.find(e=>e.p.region)?.p.region||"",home:homes.includes(dc)}));
   const statC=[{k:'fr',label:'1st Rate',fmt:v=>pct(v),heat:'hi',title:'How often their team placed 1st'},{k:'avgPlace',label:'Avg Place',fmt:v=>fmt(v,2),heat:'lo'},
     {k:'kda',label:'KDA',fmt:v=>fmt(v,2),heat:'hi'},{k:'kills_pm',label:'Kills/M',fmt:v=>fmt(v,2),heat:'hi'},{k:'deaths_pm',label:'Deaths/M',fmt:v=>fmt(v,2),heat:'lo'},
-    {k:'assists_pm',label:'Assists/M',fmt:v=>fmt(v,1)},{k:'damageToPCs_pm',label:'Dmg to PCs/M',fmt:kfmt,heat:'hi'},{k:'damageTaken_pm',label:'Taken/M',fmt:kfmt},
+    {k:'assists_pm',label:'Assists/M',fmt:v=>fmt(v,1)},{k:'damageToPCs_pm',label:'Avg Damage',fmt:kfmt,heat:'hi',title:'Average damage to player characters per match'},{k:'damageTaken_pm',label:'Taken/M',fmt:kfmt},
     {k:'hpRestored_pm',label:'HP/M',fmt:kfmt},{k:'dmgPerLife',label:'Dmg/Life',fmt:kfmt,heat:'hi'},{k:'kp',label:'Kill Part.',fmt:v=>pct(v),heat:'hi'}];
   const relC=[{k:'mates',label:'As Teammate'},{k:'mateFirst',label:'1st Together',fmt:v=>pct(v),heat:'hi',title:'Your 1st-place rate when they were on your team'},
     {k:'opps',label:'As Opponent'},{k:'oppYouFirst',label:'Your 1st vs',fmt:v=>pct(v),heat:'hi',title:'Your 1st-place rate when they were against you'}];
@@ -517,9 +517,9 @@ function viewDCs(v,ms){
   table($('#dcDmg'),allRow?[...dmgRows,{...allRow,vs:base?allRow.pcs/base-1:NaN,_all:1}]:dmgRows,[
     {k:'dc',label:'Data Center',l:1,fmt:(v,r)=>r._all?`<b>${esc(v)}</b>`:`${esc(v)}${homes.includes(v)?' <span class="pill">yours</span>':''}`},
     {k:'n',label:'Player-matches',title:'How many player-matches the average is based on'},{k:'players',label:'Players'},
-    {k:'pcs',label:'Avg Dmg to PCs'+u,def:1,fmt:v=>kfmt(v)+bar(v,maxPcs,'var(--gold)'),heat:'hi'},
+    {k:'pcs',label:'Avg Damage'+u,title:'Damage to player characters only (not ice, drones or other objectives)',def:1,fmt:v=>kfmt(v)+bar(v,maxPcs,'var(--gold)'),heat:'hi'},
     {k:'med',label:'Median'+u,fmt:kfmt,title:'Middle value, less affected by a few huge games'},{k:'best',label:'Best'+u,fmt:kfmt},
-    {k:'vs',label:'vs your DC',fmt:v=>isNaN(v)?'—':`<span style="color:${v>=0?'var(--good)':'var(--bad)'}">${v>=0?'+':''}${pct(v)}</span>`,title:'Avg damage to PCs compared with players from your data center'},
+    {k:'vs',label:'vs your DC',fmt:v=>isNaN(v)?'—':`<span style="color:${v>=0?'var(--good)':'var(--bad)'}">${v>=0?'+':''}${pct(v)}</span>`,title:'Avg damage compared with players from your data center'},
     {k:'other',label:'Dmg to Other'+u,fmt:kfmt},{k:'dealt',label:'Total Dealt'+u,fmt:kfmt},{k:'taken',label:'Taken'+u,fmt:kfmt,heat:'lo'},
     {k:'hp',label:'HP Restored'+u,fmt:kfmt},{k:'life',label:'Dmg/Life',fmt:kfmt,heat:'hi',title:'Damage to PCs per life (deaths + 1)'}],
     {rowClass:r=>r._all?'teamrow':''});
