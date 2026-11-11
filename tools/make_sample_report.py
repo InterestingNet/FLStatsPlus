@@ -18,7 +18,10 @@ JOBS = [("PLD", "TANK"), ("WAR", "TANK"), ("DRK", "TANK"), ("GNB", "TANK"), ("WH
         ("AST", "HEALER"), ("SGE", "HEALER"), ("MNK", "MELEE"), ("DRG", "MELEE"), ("NIN", "MELEE"), ("SAM", "MELEE"),
         ("RPR", "MELEE"), ("VPR", "MELEE"), ("BRD", "RANGED"), ("MCH", "RANGED"), ("DNC", "RANGED"), ("BLM", "CASTER"),
         ("SMN", "CASTER"), ("RDM", "CASTER"), ("PCT", "CASTER")]
-WORLDS = ["Balmung", "Gilgamesh", "Leviathan", "Ultros", "Sargatanas", "Midgardsormr", "Faerie", "Jenova", "Cactuar", "Excalibur"]
+WORLD_DC = {"Balmung": "Crystal", "Coeurl": "Crystal", "Zalera": "Crystal", "Gilgamesh": "Aether", "Faerie": "Aether", "Jenova": "Aether",
+            "Midgardsormr": "Aether", "Leviathan": "Primal", "Ultros": "Primal", "Excalibur": "Primal", "Cactuar": "Aether",
+            "Sargatanas": "Aether", "Halicarnassus": "Dynamis", "Marilith": "Dynamis", "Ravana": "Materia", "Lich": "Light", "Tonberry": "Elemental"}
+WORLDS = list(WORLD_DC)
 FIRST = ["Aeryn", "Thal'kin", "Mira", "Bram", "Ysolde", "Kae", "Odo", "Sel", "Rhea", "Tov", "Lune", "Ash", "Vex", "Nia", "Corin",
          "Hale", "Iri", "Jun", "Kesh", "Lio", "Mae", "Nox", "Pell", "Quin", "Rook", "Sana", "Tess", "Uma", "Varo", "Wynn"]
 LAST = ["Volke", "Rho", "Halcyon", "Ostrid", "Fenn", "Ruun", "Barrow", "Marrow", "Tide", "Ashgrove", "Vale", "Corrin", "Dusk",
@@ -74,7 +77,7 @@ def make_match(i, start, with_combat, demo=False):
                 dother = int(max(0, random.gauss(1.5e5, 8e4))) if mtype == "Shatter" else 0
                 taken = int(max(80000, random.gauss(1.4e6 if tank else 9e5, 3e5) * dur / 900))
                 hp = int(max(10000, random.gauss(1.8e6 if heal else 2.5e5, 3e5) * dur / 900))
-                players.append(dict(name=name, world=world, job=job[0], role=job[1], team=t, alliance=a, isYou=you,
+                players.append(dict(name=name, world=world, dc=WORLD_DC.get(world), region=('OCE' if WORLD_DC.get(world)=='Materia' else 'EU' if WORLD_DC.get(world)=='Light' else 'JP' if WORLD_DC.get(world)=='Elemental' else 'NA'), job=job[0], role=job[1], team=t, alliance=a, isYou=you,
                                     kills=kills, deaths=deaths, assists=assists, damageDealt=dpc + dother, damageToPCs=dpc,
                                     damageToOther=dother, damageTaken=taken, hpRestored=hp, special=int(hp * .3),
                                     occupations=0 if mtype == "Triumph" else random.randint(0, 9),

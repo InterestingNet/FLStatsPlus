@@ -37,6 +37,31 @@ internal class ExportService {
         Converters = { new ObjectIdConverter(), new JsonStringEnumConverter() },
     };
 
+    private Dictionary<string, (string Dc, string Region)>? _worldDc;
+
+    /// <summary>Home world name → data center and region, from the game's World sheet.</summary>
+    internal (string? Dc, string? Region) WorldDc(string? world) {
+        if(string.IsNullOrEmpty(world)) return (null, null);
+        if(_worldDc == null) {
+            var map = new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
+            try {
+                foreach(var w in _plugin.DataManager.GetExcelSheet<World>()) {
+                    var name = w.Name.ToString();
+                    if(string.IsNullOrEmpty(name) || w.DataCenter.RowId == 0) continue;
+                    var dc = w.DataCenter.Value;
+                    var dcName = dc.Name.ToString();
+                    if(string.IsNullOrEmpty(dcName)) continue;
+                    var region = dc.Region switch { 1 => "JP", 2 => "NA", 3 => "EU", 4 => "OCE", 5 => "CN", 6 => "KR", 7 => "TC", _ => "Other" };
+                    map.TryAdd(name, (dcName, region));
+                }
+            } catch(Exception e) {
+                _plugin.Log.Error(e, "Could not read world list");
+            }
+            _worldDc = map;
+        }
+        return _worldDc.TryGetValue(world, out var v) ? (v.Dc, v.Region) : (null, null);
+    }
+
     internal ExportService(Plugin plugin) {
         _plugin = plugin;
     }
@@ -220,6 +245,8 @@ internal class ExportService {
             var pd = new PlayerDto {
                 Name = p.Name.Name,
                 World = p.Name.HomeWorld,
+                Dc = WorldDc(p.Name.HomeWorld).Dc,
+                Region = WorldDc(p.Name.HomeWorld).Region,
                 Job = p.Job?.ToString() ?? JobAbbr(p.ClassJobId),
                 Role = p.Job != null ? PlayerJobHelper.GetSubRoleFromJob(p.Job)?.ToString() : null,
                 Team = p.Team.ToString(),
@@ -659,6 +686,9 @@ internal class ExportService {
     internal class PlayerDto {
         public string Name { get; set; } = "";
         public string World { get; set; } = "";
+        /// <summary>Data center of the player's home world</summary>
+        public string? Dc { get; set; }
+        public string? Region { get; set; }
         public string? Job { get; set; }
         public string? Role { get; set; }
         public string Team { get; set; } = "";

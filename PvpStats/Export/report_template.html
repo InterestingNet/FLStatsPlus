@@ -194,7 +194,7 @@ function lineChart(series,{w=900,h=220,xmax,ymax,ymin=0,bands,markers=[],yfmt=v=
 function bindTips(root){root.querySelectorAll('[data-tip]').forEach(n=>{n.onmousemove=e=>showTip(e,n.dataset.tip);n.onmouseleave=hideTip})}
 
 /* ═══════════════════════════ filters ═══════════════════════════ */
-const F={map:"",job:"",result:"",from:"",to:"",fav:false,tag:"",player:"",with:"any",src:"you",minMatches:3,search:""};
+const F={dc:"",dcSrc:"others",map:"",job:"",result:"",from:"",to:"",fav:false,tag:"",player:"",with:"any",src:"you",minMatches:3,search:""};
 function buildFilters(){
   const maps=[...new Set(ALL.map(m=>m.mapName))].sort();
   const jobs=[...new Set(ALL.map(m=>m._you?.job).filter(Boolean))].sort();
@@ -261,7 +261,7 @@ function aggregate(entries){ // entries: [{p, m}]
 function youEntries(ms){return ms.filter(m=>m._you).map(m=>({p:m._you,m}))}
 
 /* ═══════════════════════════ views ═══════════════════════════ */
-const VIEWS=[["matches","Matches"],["summary","Summary"],["records","Records"],["jobs","Jobs"],["players","Players"],["meta","Meta"],["combat","Combat"],["match","Match Detail"]];
+const VIEWS=[["matches","Matches"],["summary","Summary"],["records","Records"],["jobs","Jobs"],["players","Players"],["dcs","Data Centers"],["meta","Meta"],["combat","Combat"],["match","Match Detail"]];
 let VIEW=R.mode==="match"?"match":"matches",SEL=null;
 function nav(){
   $('#nav').innerHTML=VIEWS.map(([k,l])=>`<button data-v="${k}" class="${VIEW===k?'on':''} ${k==='match'&&!SEL?'hidden':''}">${l}</button>`).join('');
@@ -277,7 +277,7 @@ function refresh(){
   nav();
   const v=$('#view');
   if(!ALL.length){v.innerHTML='<section class="panel"><div class="empty">This report contains no matches.</div></section>';return}
-  ({matches:viewMatches,summary:viewSummary,records:viewRecords,jobs:viewJobs,players:viewPlayers,meta:viewMeta,combat:viewCombat,match:viewMatch})[VIEW](v,ms);
+  ({matches:viewMatches,summary:viewSummary,records:viewRecords,jobs:viewJobs,players:viewPlayers,dcs:viewDCs,meta:viewMeta,combat:viewCombat,match:viewMatch})[VIEW](v,ms);
   bindTips(v);
 }
 
@@ -448,6 +448,85 @@ function viewPlayers(v,ms){
   table($('#tbl'),rows,[{k:'name',label:'Name',l:1},{k:'world',label:'Home World',l:1},{k:'job',label:'Fav. Job',l:1},
     {k:'mates',label:'As Teammate'},{k:'mateFirst',label:'1st Together',fmt:v=>pct(v),heat:'hi'},{k:'opps',label:'As Opponent'},{k:'oppYouFirst',label:'Your 1st vs',fmt:v=>pct(v),heat:'hi'},...statCols()]);
   $('#tbl').insertAdjacentHTML('afterbegin',`<div class="dim" style="margin-bottom:6px">Total players: ${rows.length}</div>`);
+}
+
+/* ─────────── Data Centers ─────────── */
+const DCPAL=["#4f8fd9","#e0a458","#5fb87a","#c86f9a","#8f7be0","#6fd3e8","#d9d26a","#c85a5a"];
+const dcOf=p=>p.dc||"Unknown";
+function viewDCs(v,ms){
+  const yourDc=m=>m._you?dcOf(m._you):null;
+  v.innerHTML=`<section class="panel"><header><h2>Data Centers</h2><div class="flex"><span class="dim">Players counted</span>
+     <select id="dcSrc"><option value="others">Everyone but you</option><option value="team">Teammates</option><option value="opp">Opponents</option></select></div></header>
+     <div class="body"><div class="tiles" id="dcTiles"></div></div></section>
+   <section class="panel"><header><h2>By data center</h2><span class="dim">click a data center to see its worlds and players</span></header><div class="body" id="dcTbl"></div></section>
+   <section class="panel"><header><h2>Share of players over time</h2><span class="dim" id="dcTrendNote"></span></header><div class="body" id="dcTrend"></div></section>
+   <section class="panel ${F.dc?'':'hidden'}" id="dcDetail"><header><h2 id="dcDetailTitle"></h2><button class="btn" id="dcClear">Show all</button></header><div class="body"><div class="grid2"><div id="dcWorlds"></div><div id="dcPlayers"></div></div></div></section>
+   <section class="panel"><header><h2>Possible transfers</h2><span class="flex"><span class="dim">same name on a new data center after it stopped appearing on the old one</span><label class="dim"><input type="checkbox" id="dcOverlap" ${F.dcOverlap?'checked':''}> also show overlaps (often different people)</label></span></header><div class="body" id="dcMoves"></div></section>`;
+  const src=F.dcSrc||"others";$('#dcSrc').value=src;$('#dcSrc').onchange=e=>{F.dcSrc=e.target.value;refresh()};
+  const es=sourceEntries(ms,src).filter(e=>!e.p.isYou);
+  // tiles
+  const uniq=new Set(es.map(e=>e.p.name+" "+e.p.world)),dcs=new Set(es.map(e=>dcOf(e.p)));
+  const same=es.filter(e=>yourDc(e.m)&&dcOf(e.p)===yourDc(e.m)).length;
+  const yourRegion=m=>m._you?.region;
+  const crossRegion=es.filter(e=>yourRegion(e.m)&&e.p.region&&e.p.region!==yourRegion(e.m)).length;
+  const mixed=ms.filter(m=>new Set(m.players.map(dcOf)).size>1).length;
+  const avgDcs=safeDiv(sum(ms,m=>new Set(m.players.map(dcOf)).size),ms.length);
+  const homes=[...new Set(ms.map(yourDc).filter(Boolean))];
+  $('#dcTiles').innerHTML=[["Data centers seen",fmt(dcs.size)],["Players seen",fmt(uniq.size)],["Your data center",esc(homes.join(", ")||"—")],
+    ["From your DC",pct(safeDiv(same,es.length))],["From other DCs",pct(safeDiv(es.length-same,es.length))],["From other regions",pct(safeDiv(crossRegion,es.length))],
+    ["Matches with other DCs",pct(safeDiv(mixed,ms.length))],["Avg DCs per match",fmt(avgDcs,1)]]
+    .map(([k,val])=>`<div class="tile"><div class="k">${k}</div><div class="v">${val}</div></div>`).join('');
+  // by DC
+  const by={};es.forEach(e=>(by[dcOf(e.p)]??=[]).push(e));
+  const rowFor=(key,list,extra)=>{const a=aggregate(list),mates=list.filter(e=>e.p.team===e.m._team),opps=list.filter(e=>e.m._team&&e.p.team!==e.m._team);
+    return{key,...extra,players:new Set(list.map(e=>e.p.name+" "+e.p.world)).size,app:list.length,share:list.length/Math.max(1,es.length),
+      matches:new Set(list.map(e=>e.m)).size,mates:mates.length,opps:opps.length,
+      mateFirst:safeDiv(mates.filter(e=>e.m._place===0).length,mates.length),oppYouFirst:safeDiv(opps.filter(e=>e.m._place===0).length,opps.length),
+      ...a,fr:a.firstRate}};
+  const rows=Object.entries(by).map(([dc,list])=>rowFor(dc,list,{dc,region:list.find(e=>e.p.region)?.p.region||"",home:homes.includes(dc)}));
+  const statC=[{k:'fr',label:'1st Rate',fmt:v=>pct(v),heat:'hi',title:'How often their team placed 1st'},{k:'avgPlace',label:'Avg Place',fmt:v=>fmt(v,2),heat:'lo'},
+    {k:'kda',label:'KDA',fmt:v=>fmt(v,2),heat:'hi'},{k:'kills_pm',label:'Kills/M',fmt:v=>fmt(v,2),heat:'hi'},{k:'deaths_pm',label:'Deaths/M',fmt:v=>fmt(v,2),heat:'lo'},
+    {k:'assists_pm',label:'Assists/M',fmt:v=>fmt(v,1)},{k:'damageToPCs_pm',label:'Dmg to PCs/M',fmt:kfmt,heat:'hi'},{k:'damageTaken_pm',label:'Taken/M',fmt:kfmt},
+    {k:'hpRestored_pm',label:'HP/M',fmt:kfmt},{k:'dmgPerLife',label:'Dmg/Life',fmt:kfmt,heat:'hi'},{k:'kp',label:'Kill Part.',fmt:v=>pct(v),heat:'hi'}];
+  const relC=[{k:'mates',label:'As Teammate'},{k:'mateFirst',label:'1st Together',fmt:v=>pct(v),heat:'hi',title:'Your 1st-place rate when they were on your team'},
+    {k:'opps',label:'As Opponent'},{k:'oppYouFirst',label:'Your 1st vs',fmt:v=>pct(v),heat:'hi',title:'Your 1st-place rate when they were against you'}];
+  table($('#dcTbl'),rows,[{k:'dc',label:'Data Center',l:1,fmt:(v,r)=>`${esc(v)}${r.home?' <span class="pill">yours</span>':''}${F.dc===v?' ◀':''}`},{k:'region',label:'Region',l:1},
+    {k:'players',label:'Players'},{k:'app',label:'Appearances',def:1,title:'Player-matches'},{k:'share',label:'Share',fmt:v=>pct(v)+bar(v,1,'var(--gold)')},{k:'matches',label:'Matches'},
+    ...relC,...statC],{onClick:r=>{F.dc=F.dc===r.dc?"":r.dc;refresh()},rowClass:r=>F.dc===r.dc?'you':''});
+  // trend: rolling share per DC across matches (top 6 DCs, rest = Other)
+  const top=[...rows].sort((a,b)=>b.app-a.app).slice(0,6).map(r=>r.dc),Wn=Math.min(20,Math.max(3,Math.round(ms.length/8)));
+  const perMatch=ms.map(m=>{const c={},ps=m.players.filter(p=>!p.isYou&&(src==="others"||(src==="team"?p.team===m._team:m._team&&p.team!==m._team)));
+    ps.forEach(p=>{const k=top.includes(dcOf(p))?dcOf(p):"Other";c[k]=(c[k]||0)+1});return{c,n:ps.length}});
+  const keys=[...top,...(perMatch.some(x=>x.c.Other)?["Other"]:[])];
+  if(ms.length>=2){
+    const series=keys.map((k,i)=>({name:k,color:DCPAL[i%DCPAL.length],pts:perMatch.map((_,j)=>{const w=perMatch.slice(Math.max(0,j-Wn+1),j+1);return[j+1,safeDiv(sum(w,x=>x.c[k]||0),sum(w,x=>x.n))||0]})}));
+    $('#dcTrend').innerHTML=lineChart(series,{xmax:ms.length,ymax:1,yfmt:v=>pct(v,0),xfmt:x=>x?'#'+Math.round(x):''})+
+      `<div class="flex" style="gap:14px;flex-wrap:wrap;margin-top:4px">${series.map(s=>`<span><span style="color:${s.color}">■</span> ${esc(s.name)}</span>`).join('')}</div>`;
+    $('#dcTrendNote').textContent=`rolling average over the last ${Wn} matches, oldest → newest`;
+  }else $('#dcTrend').innerHTML='<div class="empty">Needs at least 2 matches.</div>';
+  // detail for the selected DC
+  if(F.dc){
+    const list=by[F.dc]||[];
+    $('#dcDetailTitle').textContent=`${F.dc} — worlds and players`;$('#dcClear').onclick=()=>{F.dc="";refresh()};
+    const bw={};list.forEach(e=>(bw[e.p.world]??=[]).push(e));
+    table($('#dcWorlds'),Object.entries(bw).map(([w,l])=>rowFor(w,l,{world:w})),[{k:'world',label:'World',l:1},{k:'players',label:'Players'},{k:'app',label:'Appearances',def:1},
+      {k:'fr',label:'1st Rate',fmt:v=>pct(v),heat:'hi'},{k:'kda',label:'KDA',fmt:v=>fmt(v,2),heat:'hi'},{k:'damageToPCs_pm',label:'Dmg/M',fmt:kfmt,heat:'hi'}],{noscroll:1});
+    const bp={};list.forEach(e=>(bp[e.p.name+" "+e.p.world]??=[]).push(e));
+    table($('#dcPlayers'),Object.entries(bp).map(([k,l])=>{const jobs={};l.forEach(e=>jobs[e.p.job]=(jobs[e.p.job]||0)+1);
+      return rowFor(k,l,{name:l[0].p.name,world:l[0].p.world,job:Object.entries(jobs).sort((a,b)=>b[1]-a[1])[0][0]})}),
+      [{k:'name',label:'Name',l:1,fmt:(v,r)=>`${esc(v)} <span class="dim">${esc(r.world)}</span>`},{k:'job',label:'Fav. Job',l:1},{k:'app',label:'Matches',def:1},
+       {k:'mates',label:'With you'},{k:'opps',label:'Against'},{k:'kda',label:'KDA',fmt:v=>fmt(v,2),heat:'hi'},{k:'damageToPCs_pm',label:'Dmg/M',fmt:kfmt,heat:'hi'}]);
+  }
+  // possible transfers: same name, different DCs, ordered by time
+  const seen={};
+  for(const m of ms)for(const p of m.players){const r=(seen[p.name]??={}),k=p.world;(r[k]??={world:k,dc:dcOf(p),first:m._t,last:m._t,n:0});r[k].last=m._t;r[k].n++}
+  const moves=[];
+  for(const [name,w] of Object.entries(seen)){const ws=Object.values(w);if(new Set(ws.map(x=>x.dc)).size<2)continue;ws.sort((a,b)=>a.first-b.first);
+    const a=ws[0],b=ws[ws.length-1];
+    moves.push({name,from:`${a.world} (${a.dc})`,to:`${b.world} (${b.dc})`,clean:a.last<=b.first,lastOld:a.last,firstNew:b.first,n:sum(ws,x=>x.n),worlds:ws.length})}
+  $('#dcOverlap').onchange=e=>{F.dcOverlap=e.target.checked;refresh()};
+  table($('#dcMoves'),F.dcOverlap?moves:moves.filter(x=>x.clean),[{k:'name',label:'Name',l:1},{k:'from',label:'First seen on',l:1},{k:'lastOld',label:'Last seen there',fmt:dt},{k:'to',label:'Now seen on',l:1},{k:'firstNew',label:'First seen there',def:1,fmt:dt},
+    {k:'clean',label:'Looks like a transfer',fmt:v=>v?'yes':'<span class="dim">overlaps</span>',title:'"yes" when the old world stops appearing before the new one starts'},{k:'n',label:'Matches'}]);
 }
 
 /* ─────────── Meta ─────────── */
@@ -632,7 +711,7 @@ function drawScoreboard(m,order){
     if(grp==='team'){if(MD.totals)rows.push(teamRow(t,ps,t));rows.push(...ps.map(row))}
     else for(let a=0;a<3;a++){const pa=ps.filter(p=>p.alliance===a);if(!pa.length)continue;if(MD.totals)rows.push(teamRow(`${t} — Alliance ${ALLI[a]}`,pa,t));rows.push(...pa.map(row))}}
   const nf=k=>(v,r)=>MD.pct&&!r._team?pct(v):(k==='kills'||k==='deaths'||k==='assists'?fmt(v):kfmt(v));
-  const cols=[{k:'name',label:'Name',l:1,fmt:(v,r)=>r._team?`<span class="t-${r.team}">■</span> ${esc(v)}`:`<span class="t-${r.team}">●</span> ${esc(v)} <span class="dim">${esc(r.world)}</span>`},
+  const cols=[{k:'name',label:'Name',l:1,fmt:(v,r)=>r._team?`<span class="t-${r.team}">■</span> ${esc(v)}`:`<span class="t-${r.team}">●</span> ${esc(v)} <span class="dim">${esc(r.world)}${r.dc?' · '+esc(r.dc):''}</span>`},
     {k:'job',label:'Job',l:1,fmt:v=>esc(v||'')},{k:'alliance',label:'All.',fmt:(v,r)=>r._team?'':ALLI[v]||''},
     ...STATS.map(([k,l])=>({k,label:l.replace('Damage','Dmg'),fmt:nf(k)})),
     {k:'special',label:'Special',fmt:kfmt,title:'Unknown healing-related value from the scoreboard'},
