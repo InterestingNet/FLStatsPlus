@@ -190,6 +190,22 @@ def make_match(i, start, with_combat, demo=False):
             for k_ in range(4):
                 combat.append(dict(t=round(t0 + 3 * k_, 1), dir="out", kind="dot", id=1234, name="Burns", other=f'{e["name"]} {e["world"]}',
                                    otherPlayer=True, otherJob=e["job"], otherTeam=e["team"], dmg=random.randint(900, 1300)))
+        # role actions: MCH Bravery (buff), DRK Rampage (AoE + debuff) and Bloodbath-style lifesteal, SGE Diabrosis (AoE + debuff)
+        ra = {"MCH": "Bravery", "DRK": "Rampage", "SGE": "Diabrosis"}[myjob[0]]
+        t0 = 20.0
+        while t0 < dur - 10:
+            seq += 1
+            if ra == "Bravery":
+                combat.append(dict(t=round(t0, 1), dir="self", kind="action", id=29700, name=ra, seq=seq, other="(self)", otherPlayer=False, statusApplied=1))
+            else:
+                for e in random.sample(enemies[:30], random.randint(1, 5)):
+                    combat.append(dict(t=round(t0, 1), dir="out", kind="action", id=29701, name=ra, seq=seq, other=f'{e["name"]} {e["world"]}', otherPlayer=True,
+                                       otherJob=e["job"], otherTeam=e["team"], dmg=int(8000 * random.uniform(.8, 1.2)), statusApplied=1))
+            if myjob[0] == "DRK":
+                for k_ in range(4):
+                    combat.append(dict(t=round(t0 + 2 + k_ * 2, 1), dir="self", kind="action", id=29600, name="Hard Slash", other="(self)", otherPlayer=False,
+                                       heal=random.randint(2000, 5000), lifesteal=True, via="Bloodbath"))
+            t0 += random.uniform(30, 50)
         # some hits land on shields: part (or all) of the damage goes to the shield
         for c in combat:
             if c["kind"] == "action" and c["dir"] in ("out", "in") and c.get("dmg") and random.random() < .15:

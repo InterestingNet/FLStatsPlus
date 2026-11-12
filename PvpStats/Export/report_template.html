@@ -632,6 +632,7 @@ function viewCombat(v,ms){
      <div style="margin-top:12px"><div class="dim" style="margin-bottom:4px">Your heals on yourself, by source</div><div id="cHLsrc"></div></div></div></section>
    <section class="panel"><header><h2>Shields & Reflects — all logged matches</h2></header><div class="body"><div class="tiles" id="cSR"></div>
      <div class="grid2" style="margin-top:12px"><div><div class="dim" style="margin-bottom:4px">Shield sources</div><div id="cSRsrc"></div></div><div><div class="dim" style="margin-bottom:4px">Reflects by status</div><div id="cSRref"></div></div></div></div></section>
+   <section class="panel"><header><h2>Role Actions — all logged matches</h2><span class="dim" id="cRAnote"></span></header><div class="body" id="cRA"><div class="empty">Reading combat logs…</div></div></section>
    <section class="panel"><header><h2>Best Casts — all logged matches</h2><span class="dim">your biggest single uses of a skill (all players hit, added together) · click to open the match</span></header><div class="body" id="cBest"></div></section>
    <div class="grid2">
     <section class="panel"><header><h2>Players You Hit Most</h2></header><div class="body" id="cTargets"></div></section>
@@ -664,6 +665,13 @@ function viewCombat(v,ms){
     if(!Object.keys(src).length)$('#cSRsrc').innerHTML='<div class="empty">No shield data yet. Matches played on this update or later record it.</div>';
     if(!rf.length)$('#cSRref').innerHTML='<div class="empty">No reflected damage recorded.</div>';}
   const best=withLog.flatMap(m=>(m.combatSummary.topCasts||[]).map(c=>{const total=c.total??c.damage+(c.tickDamage||0);return{...c,total,m,map:m.mapName,when:m._t,avg:total/Math.max(1,c.targets)}}));
+  (async()=>{const list=withLog.filter(m=>m.combat||m.combatGz);let done=0;
+    for(const m of list){if(!m.combat){await ensureCombat(m);done++;if(done%10===0&&$('#cRAnote'))$('#cRAnote').textContent=`reading combat logs… ${done}/${list.length}`}}
+    if(VIEW!=='combat'||!$('#cRA'))return;
+    const uses=list.flatMap(m=>roleActionUses(m).map(u=>({...u,m})));
+    $('#cRAnote').textContent=`${list.length} match(es) with a full combat log · hover a column for what it counts`;
+    if(!uses.length){$('#cRA').innerHTML='<div class="empty">No role action uses recorded.</div>';return}
+    table($('#cRA'),roleActionRows(uses),raCols(true),{noscroll:1});})();
   table($('#cBest'),best,[{k:'when',label:'Match',l:1,fmt:(v,r)=>`${dt(v)} · ${esc(r.map)}`},{k:'t',label:'At',fmt:mmss},{k:'name',label:'Skill',l:1},{k:'targets',label:'Players Hit'},
     {k:'damage',label:'Direct',fmt:v=>fmt(v)},{k:'tickDamage',label:'Tick Dmg',fmt:v=>v?fmt(v):''},{k:'total',label:'Total',def:1,fmt:v=>`<b>${fmt(v)}</b>`},{k:'avg',label:'Avg / Target',fmt:kfmt},{k:'kills',label:'Kills'}],
     {onClick:r=>{openMatch(r.m);ensureCombat(r.m).then(()=>setTimeout(()=>{const C=r.m.combat;if(!C)return;const cs=groupCasts(C.filter(c=>c.dir==='out'&&c.kind!=='death'),C);const hit=cs.find(c=>Math.abs(c.t-r.t)<.05&&c.name===r.name);
@@ -680,6 +688,56 @@ function ensureCombat(m){
     m.combat=JSON.parse(txt);})().catch(e=>{console.error('could not unpack combat log',e);m.combatGz=null});
   _unpacking.set(m,p);return p;
 }
+/* ─────────── Role actions ─────────── */
+// PvP role actions (patch 7.2+). buff/debuff = seconds the effect lasts, used for "while active" stats.
+const RA={
+  'Rampage':{role:'Tank',debuff:10,note:'target takes +25% damage'},'Rampart':{role:'Tank',buff:15,def:1},'Full Swing':{role:'Tank'},
+  'Bloodbath':{role:'Melee',buff:10,lifesteal:1},'Swift':{role:'Melee',buff:4},'Smite':{role:'Melee'},
+  'Dervish':{role:'Phys. Ranged',buff:12},'Bravery':{role:'Phys. Ranged',buff:15,def:1},'Eagle Eye Shot':{role:'Phys. Ranged'},
+  'Comet':{role:'Caster'},'Phantom Dart':{role:'Caster',debuff:5,note:'target takes +25% damage'},'Rust':{role:'Caster',debuff:10,rust:1},
+  'Haelan':{role:'Healer'},'Stoneskin II':{role:'Healer',shield:1},'Diabrosis':{role:'Healer',debuff:10,note:'target gets -33% healing'}};
+const raName=n=>(n||'').replace(/\s*\(PvP\)$/,'');
+/* Every use of a role action in one match, with what it did. Needs the raw combat log. */
+function roleActionUses(m){
+  if(m._ra)return m._ra;const C=m.combat;if(!C)return[];
+  const mine=C.filter(r=>r.kind==='action'&&(r.dir==='out'||r.dir==='self')&&RA[raName(r.name)]).sort((a,b)=>a.t-b.t);
+  const uses=[];let cur=null;
+  for(const r of mine){const n=raName(r.name);
+    if(!cur||cur.name!==n||(r.seq&&cur.seq?r.seq!==cur.seq:r.t-cur.t>.5)){cur={name:n,t:r.t,seq:r.seq,rows:[]};uses.push(cur)}cur.rows.push(r)}
+  const out=C.filter(r=>r.dir==='out'&&r.kind!=='death'),inc=C.filter(r=>r.dir==='in'&&r.kind!=='death');
+  const si=m.selfShield?.length?shieldInfo(m):null;
+  for(const u of uses){const d=RA[u.name],hit=u.rows.filter(r=>r.dir==='out'&&r.otherPlayer!==false&&(r.dmg||r.miss||r.statusApplied||r.invuln));
+    const victims=new Set(hit.filter(r=>r.dmg||r.statusApplied).map(r=>r.other));
+    Object.assign(u,{role:d.role,targets:new Set(hit.map(r=>r.other)).size,damage:sum(u.rows,r=>r.dir==='out'?r.dmg||0:0),
+      heal:sum(u.rows,r=>r.heal||0),crits:u.rows.filter(r=>r.crit).length,kills:u.rows.filter(r=>r.kb).length,shield:0,during:0,takenDuring:0,healDuring:0});
+    if(d.shield&&si)u.shield=sum(si.gains.filter(g=>g.castT!=null&&Math.abs(g.castT-u.t)<.6),g=>g.amount);
+    if(d.buff){const t1=u.t+d.buff,inW=r=>r.t>u.t&&r.t<=t1;
+      u.during=sum(out.filter(inW),r=>r.dmg||0);u.takenDuring=sum(inc.filter(inW),r=>r.dmg||0)}
+    if(d.debuff){const t1=u.t+d.debuff,inW=r=>r.t>=u.t&&r.t<=t1&&r.seq!==u.seq&&victims.has(r.other);
+      u.during=sum(out.filter(inW),r=>r.dmg||0);if(d.rust)u.takenDuring=sum(inc.filter(inW),r=>r.dmg||0)}}
+  // lifesteal is credited to the status that caused it (Bloodbath), whenever it happened
+  const steals=C.filter(r=>r.heal&&r.lifesteal&&r.via);
+  for(const [n,d] of Object.entries(RA)){if(!d.lifesteal)continue;
+    const mineSteal=steals.filter(r=>r.via.split(/,\s*|\s*\+\s*/).includes(n));
+    for(const r of mineSteal){const u=[...uses].reverse().find(u=>u.name===n&&u.t<=r.t+.3&&r.t-u.t<=(d.buff||10)+1);
+      if(u)u.healDuring+=r.heal;else{const g={name:n,role:d.role,t:r.t,rows:[],targets:0,damage:0,heal:0,crits:0,kills:0,shield:0,during:0,takenDuring:0,healDuring:r.heal,orphan:true};uses.push(g)}}}
+  return m._ra=uses.sort((a,b)=>a.t-b.t);
+}
+function roleActionRows(uses){
+  const o={};for(const u of uses){const x=(o[u.name]??={name:u.name,role:u.role,uses:0,targets:0,damage:0,heal:0,shield:0,kills:0,crits:0,during:0,takenDuring:0,healDuring:0,best:0,matches:new Set()});
+    if(!u.orphan)x.uses++;x.targets+=u.targets;x.damage+=u.damage;x.heal+=u.heal+u.healDuring;x.shield+=u.shield;x.kills+=u.kills;x.crits+=u.crits;
+    x.during+=u.during;x.takenDuring+=u.takenDuring;x.best=Math.max(x.best,(u.damage+u.heal+u.healDuring+u.shield)||u.during);if(u.m)x.matches.add(u.m)}
+  return Object.values(o).map(x=>({...x,matches:x.matches.size,total:x.damage+x.heal+x.shield,perUse:x.uses?((x.damage+x.heal+x.shield)||x.during)/x.uses:0,avgTargets:x.targets/Math.max(1,x.uses)}));
+}
+const raCols=(agg)=>[{k:'name',label:'Role Action',l:1,fmt:(v,r)=>`${esc(v)} <span class="pill">${esc(r.role)}</span>`},
+  ...(agg?[{k:'matches',label:'Matches'}]:[]),{k:'uses',label:'Uses',fmt:(v,r)=>v||(r.heal?'<span class="dim" title="Lifesteal was recorded but the cast itself was not">—</span>':'')},{k:'avgTargets',label:'Players Hit / Use',fmt:v=>v?fmt(v,1):''},
+  {k:'damage',label:'Damage',fmt:v=>v?fmt(v):'',title:'Damage the action itself did (incl. damage into shields)'},{k:'kills',label:'Kills',fmt:v=>v||''},
+  {k:'heal',label:'Healing',fmt:v=>v?`<span class="heal">${fmt(v)}</span>`:'',title:'Healing it did. Bloodbath: all HP your hits gave back while it was up'},
+  {k:'shield',label:'Shield',fmt:v=>v?fmt(v):'',title:'Barrier it put on you (Stoneskin II)'},
+  {k:'total',label:'Total',def:1,fmt:v=>v?`<b>${kfmt(v)}</b>`:'',title:'Damage + healing + shield'},{k:'perUse',label:'Per Use',fmt:v=>v?kfmt(v):'',title:'Total per use. For buffs that do no damage themselves (e.g. Bravery), your damage while active per use'},{k:'best',label:'Best Use',fmt:v=>v?kfmt(v):'',title:'Biggest single use, same measure as Per Use'},
+  {k:'during',label:'Your Dmg While Active',fmt:v=>v?kfmt(v):'',title:'Buffs (Bloodbath, Bravery, Dervish, Swift, Rampart): all damage you dealt while it was up.\nDebuffs (Rampage, Phantom Dart, Diabrosis, Rust): damage you dealt to the players it hit, while the debuff lasted.'},
+  {k:'takenDuring',label:'Taken While Active',fmt:v=>v?kfmt(v):'',title:'Rampart / Bravery / Bloodbath etc.: damage you took while it was up.\nRust: damage the rusted players did to you while it lasted.'}];
+
 /* ─────────── Match detail ─────────── */
 const MD={totals:true,pct:false,teamFirst:true,cView:'out',cSkill:null,cDir:'all',cText:'',atWin:0,atPos:0,atCd:true,atTicks:true,atKD:true,atMin:1,cast:null};
 function viewMatch(v){
@@ -1056,6 +1114,8 @@ function drawCombat(m){
     <div style="margin-top:12px"><div class="dim" style="margin-bottom:4px">Your heals on yourself, by source</div><div id="hlSources"></div></div>
     <div class="grid2" style="margin-top:12px"><div><div class="dim" style="margin-bottom:4px">Teammates you healed</div><div id="hlTargets"></div></div>
     <div><div class="dim" style="margin-bottom:4px">Healing you received from teammates</div><div id="hlReceived"></div></div></div></div></section>`:''}
+  ${C&&roleActionUses(m).length?`<section class="panel"><header><h2>Role Actions</h2><span class="dim">your PvP role action · hover a column for what it counts · click a row for every use</span></header>
+    <div class="body"><div id="raTbl"></div><div id="raUses" style="margin-top:12px"></div></div></section>`:''}
   <section class="panel"><header><h2>Biggest Casts</h2><span class="dim">every target a single cast hit, added together · click for the breakdown</span></header><div class="body" id="topCasts"></div></section>
   <div class="grid2">
    <section class="panel"><header><h2 id="skillTitle">Skills</h2><div class="flex"><button class="btn ${MD.cView==='out'?'on':''}" data-cv="out">Dealt</button><button class="btn ${MD.cView==='in'?'on':''}" data-cv="in">Taken</button></div></header><div class="body" id="cSkills"></div></section>
@@ -1093,6 +1153,16 @@ function drawCombat(m){
       {k:'targets',label:'Attackers'},{k:'hits',label:'Hits'},{k:'total',label:'Reflected',def:1,fmt:v=>fmt(v)},{k:'kills',label:'Kills'}],
       {noscroll:1,sort:'t',dir:1,onClick:r=>{MD.cast=r._c;if(!+MD.atWin)MD.atWin=60;centerWindowOn(m,r._c.t);drawAbilityTimeline(m,casts,deathsOf(C));showCast(m,r._c,casts);$('#atPanel').scrollIntoView({behavior:'smooth'})}});
     if(!refl.length)$('#srReflects').innerHTML='<div class="empty">No reflected damage recorded.</div>';}
+  if($('#raTbl')){const uses=roleActionUses(m),drawUses=name=>{const us=uses.filter(u=>u.name===name&&!u.orphan);MD.raSel=name;
+      $('#raUses').innerHTML=`<div class="dim" style="margin-bottom:4px">Every ${esc(name)} · click to see it on the timeline</div><div id="raUseTbl"></div>`;
+      table($('#raUseTbl'),us.map(u=>({...u,_u:u,total:u.damage+u.heal+u.healDuring+u.shield,hl:u.heal+u.healDuring})),[{k:'t',label:'Time',l:1,fmt:mmss},{k:'targets',label:'Players Hit',fmt:v=>v||''},
+        {k:'damage',label:'Damage',fmt:v=>v?fmt(v):''},{k:'kills',label:'Kills',fmt:v=>v||''},{k:'hl',label:'Healing',fmt:v=>v?`<span class="heal">${fmt(v)}</span>`:''},{k:'shield',label:'Shield',fmt:v=>v?fmt(v):''},
+        {k:'during',label:'Your Dmg While Active',fmt:v=>v?fmt(v):''},{k:'takenDuring',label:'Taken While Active',fmt:v=>v?fmt(v):''}],
+        {noscroll:1,sort:'t',dir:1,onClick:r=>{const c=casts.find(c=>Math.abs(c.t-r.t)<.6&&raName(c.name)===name);if(!+MD.atWin)MD.atWin=60;centerWindowOn(m,r.t);
+          if(c){MD.cast=c;drawAbilityTimeline(m,casts,deathsOf(C));showCast(m,c,casts)}else drawAbilityTimeline(m,casts,deathsOf(C));$('#atPanel').scrollIntoView({behavior:'smooth'})}})};
+    const rows=roleActionRows(uses);
+    table($('#raTbl'),rows,raCols(false),{noscroll:1,onClick:r=>drawUses(r.name)});
+    drawUses(rows.find(r=>r.name===MD.raSel)?MD.raSel:[...rows].sort((a,b)=>b.uses-a.uses)[0].name);}
   casts.forEach(c=>{c.total??=c.damage+(c.tickDamage||0)});
   const castStats={};casts.forEach(c=>{const x=(castStats[c.name]??={casts:0,targets:0,maxTargets:0,best:0,tick:0});x.casts++;x.targets+=c.targets;x.maxTargets=Math.max(x.maxTargets,c.targets);x.best=Math.max(x.best,c.total);x.tick+=c.tickDamage||0});
   const idle=C?idleReady(m,casts):{};
